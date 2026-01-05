@@ -35,6 +35,7 @@ class EInkDisplay {
   // Frame buffer operations
   void clearScreen(uint8_t color = 0xFF);
   void drawImage(const uint8_t* imageData, uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool fromProgmem = false);
+  void drawRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
   void swapBuffers();
   void setFramebuffer(const uint8_t* bwBuffer);

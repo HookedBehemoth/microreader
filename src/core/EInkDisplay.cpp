@@ -341,6 +341,31 @@ void EInkDisplay::drawImage(const uint8_t* imageData, uint16_t x, uint16_t y, ui
   Serial.printf("[%lu]   Image drawn to frame buffer\n", millis());
 }
 
+void EInkDisplay::drawRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+  if (!frameBuffer) {
+    Serial.printf("[%lu]   ERROR: Frame buffer not allocated!\n", millis());
+    return;
+  }
+  // Draw filled rectangle by setting individual pixels so arbitrary widths
+  // (not multiples of 8) are handled correctly.
+  for (uint16_t row = 0; row < h; row++) {
+    uint16_t destY = y + row;
+    if (destY >= DISPLAY_HEIGHT)
+      break;
+
+    for (uint16_t col = 0; col < w; col++) {
+      uint16_t destX = x + col;
+      if (destX >= DISPLAY_WIDTH)
+        break;
+
+      uint16_t byteIndex = destY * DISPLAY_WIDTH_BYTES + (destX / 8);
+      uint8_t bitPosition = 7 - (destX % 8);  // MSB first
+      // Clear bit to make pixel black (frame buffers are initialized to 0xFF = white)
+      frameBuffer[byteIndex] &= static_cast<uint8_t>(~(1 << bitPosition));
+    }
+  }
+}
+
 void EInkDisplay::writeRamBuffer(uint8_t ramBuffer, const uint8_t* data, uint32_t size) {
   const char* bufferName = (ramBuffer == CMD_WRITE_RAM_BW) ? "BW" : "RED";
   unsigned long startTime = millis();

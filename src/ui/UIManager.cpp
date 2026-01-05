@@ -6,6 +6,7 @@
 #include "resources/images/bebop_image.h"
 #include "ui/screens/FileBrowserScreen.h"
 #include "ui/screens/ImageViewerScreen.h"
+#include "ui/screens/PkPassViewerScreen.h"
 #include "ui/screens/TextViewerScreen.h"
 
 UIManager::UIManager(EInkDisplay& display, SDCardManager& sdManager)
@@ -16,6 +17,8 @@ UIManager::UIManager(EInkDisplay& display, SDCardManager& sdManager)
   screens[ScreenId::FileBrowser] =
       std::unique_ptr<Screen>(new FileBrowserScreen(display, textRenderer, sdManager, *this));
   screens[ScreenId::ImageViewer] = std::unique_ptr<Screen>(new ImageViewerScreen(display, *this));
+  screens[ScreenId::PkPassViewer] =
+      std::unique_ptr<Screen>(new PkPassViewerScreen(display, sdManager, *this));
   screens[ScreenId::TextViewer] =
       std::unique_ptr<Screen>(new TextViewerScreen(display, textRenderer, sdManager, *this));
   Serial.printf("[%lu] UIManager: Constructor called\n", millis());
@@ -44,7 +47,7 @@ void UIManager::begin() {
   if (sdManager.ready() && settings) {
     int saved = 0;
     if (settings->getInt(String("ui.screen"), saved)) {
-      if (saved >= 0 && saved <= static_cast<int>(ScreenId::TextViewer)) {
+      if (saved >= 0 && saved < static_cast<int>(ScreenId::Count)) {
         currentScreen = static_cast<ScreenId>(saved);
         Serial.printf("[%lu] UIManager: Restored screen %d from settings\n", millis(), saved);
       } else {
@@ -57,6 +60,7 @@ void UIManager::begin() {
     Serial.printf("[%lu] UIManager: SD not ready; using default start screen\n", millis());
   }
 
+  Serial.printf("[%lu] UIManager: Showing initial screen %d\n", millis(), static_cast<int>(currentScreen));
   showScreen(currentScreen);
 
   Serial.printf("[%lu] UIManager initialized\n", millis());
@@ -105,6 +109,8 @@ void UIManager::prepareForSleep() {
     screens[currentScreen]->shutdown();
   // Persist which screen was active so we can restore it on next boot.
   if (sdManager.ready() && settings) {
+    Serial.printf("[%lu] UIManager: Saving current screen %d to settings\n", millis(),
+                  static_cast<int>(currentScreen));
     settings->setInt(String("ui.screen"), static_cast<int>(currentScreen));
     if (!settings->save()) {
       Serial.println("UIManager: Failed to write settings.cfg to SD");
@@ -119,6 +125,11 @@ void UIManager::openTextFile(const String& sdPath) {
   // Directly access TextViewerScreen and open the file (guaranteed to exist)
   static_cast<TextViewerScreen*>(screens[ScreenId::TextViewer].get())->openFile(sdPath);
   showScreen(ScreenId::TextViewer);
+}
+
+void UIManager::openPkPassFile(const String& sdPath) {
+  static_cast<PkPassViewerScreen*>(screens[ScreenId::PkPassViewer].get())->openFile(sdPath);
+  showScreen(ScreenId::PkPassViewer);
 }
 
 void UIManager::showScreen(ScreenId id) {

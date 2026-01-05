@@ -9,8 +9,14 @@
 #include "../../core/SDCardManager.h"
 #include "../../rendering/TextRenderer.h"
 #include "Screen.h"
+#include "../UIManager.h"
 
-class UIManager;
+struct SdFile {
+  using OpenFn = void(UIManager::*)(const String&);
+  String name;
+  OpenFn callback;
+  SdFile(String _name, OpenFn _cb) : name(_name), callback(_cb) {}
+};
 
 class FileBrowserScreen : public Screen {
  public:
@@ -36,7 +42,7 @@ class FileBrowserScreen : public Screen {
   SDCardManager& sdManager;
   UIManager& uiManager;
 
-  std::vector<String> sdFiles;
+  std::vector<SdFile> sdFiles;
   int sdSelectedIndex = 0;
   int sdScrollOffset = 0;
 

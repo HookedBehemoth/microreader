@@ -16,6 +16,7 @@ class SDCardManager;
 class FileBrowserScreen;
 class ImageViewerScreen;
 class TextViewerScreen;
+class PkPassViewerScreen;
 
 // Hash function for enum class
 struct EnumClassHash {
@@ -30,7 +31,7 @@ class Settings;
 class UIManager {
  public:
   // Typed screen identifiers so callers don't use raw indices
-  enum class ScreenId { FileBrowser, ImageViewer, TextViewer };
+  enum class ScreenId { FileBrowser, ImageViewer, TextViewer, PkPassViewer, Count };
 
   // Constructor
   UIManager(EInkDisplay& display, class SDCardManager& sdManager);
@@ -47,6 +48,8 @@ class UIManager {
 
   // Open a text file (path on SD) in the text viewer and switch to that screen.
   void openTextFile(const String& sdPath);
+
+  void openPkPassFile(const String& sdPath);
 
  private:
   EInkDisplay& display;

@@ -81,7 +81,7 @@ void FileBrowserScreen::renderSdBrowser() {
 
   for (int i = 0; i < drawable; ++i) {
     int idx = sdScrollOffset + i;
-    String name = sdFiles[idx];
+    String name = sdFiles[idx].name;
     // For display, strip the .txt extension if present but keep the stored
     // filename intact so confirm() can open it later.
     // For .epub files, keep the extension visible.
@@ -132,12 +132,12 @@ void FileBrowserScreen::renderSdBrowser() {
 
 void FileBrowserScreen::confirm() {
   if (!sdFiles.empty()) {
-    String filename = sdFiles[sdSelectedIndex];
-    String fullPath = String("/") + filename;
+    auto& sdFile = sdFiles[sdSelectedIndex];
+    String fullPath = String("/") + sdFile.name;
     Serial.printf("Selected file: %s\n", fullPath.c_str());
 
     // Ask UI manager to open the selected file in the text viewer
-    uiManager.openTextFile(fullPath);
+    (uiManager.*(sdFile.callback))(fullPath);
   }
 }
 
@@ -169,7 +169,8 @@ void FileBrowserScreen::offsetSelection(int offset) {
   // Persist the current selection into consolidated settings
   if (!sdFiles.empty()) {
     Settings& s = uiManager.getSettings();
-    s.setString(String("filebrowser.selected"), sdFiles[sdSelectedIndex]);
+    auto& sdFile = sdFiles[sdSelectedIndex];
+    s.setString(String("filebrowser.selected"), sdFile.name);
   }
 
   show();
@@ -190,7 +191,7 @@ void FileBrowserScreen::loadFolder(int maxFiles) {
       String ext = name.substring(name.length() - 4);
       ext.toLowerCase();
       if (ext == String(".txt")) {
-        sdFiles.push_back(name);
+        sdFiles.push_back({name, &UIManager::openTextFile});
         continue;  // Avoid checking for .epub if we already matched .txt
       }
     }
@@ -199,14 +200,22 @@ void FileBrowserScreen::loadFolder(int maxFiles) {
       String ext = name.substring(name.length() - 5);
       ext.toLowerCase();
       if (ext == String(".epub")) {
-        sdFiles.push_back(name);
+        sdFiles.push_back({name, &UIManager::openTextFile});
+      }
+    }
+
+    if (name.length() >= 7) {
+      String ext = name.substring(name.length() - 7);
+      ext.toLowerCase();
+      if (ext == String(".pkpass")) {
+        sdFiles.push_back({name, &UIManager::openPkPassFile});
       }
     }
   }
 
   // Sort files alphabetically (case-sensitive using strcmp)
   std::sort(sdFiles.begin(), sdFiles.end(),
-            [](const String& a, const String& b) { return std::strcmp(a.c_str(), b.c_str()) < 0; });
+            [](const SdFile& a, const SdFile& b) { return std::strcmp(a.name.c_str(), b.name.c_str()) < 0; });
 
   // Restore saved selection if available and present in this folder
   sdSelectedIndex = 0;
@@ -216,7 +225,7 @@ void FileBrowserScreen::loadFolder(int maxFiles) {
     String saved = s.getString(String("filebrowser.selected"), String(""));
     if (saved.length() > 0) {
       for (size_t i = 0; i < sdFiles.size(); ++i) {
-        if (sdFiles[i] == saved) {
+        if (sdFiles[i].name == saved) {
           sdSelectedIndex = (int)i;
           if (sdSelectedIndex >= SD_LINES_PER_SCREEN)
             sdScrollOffset = sdSelectedIndex - SD_LINES_PER_SCREEN + 1;
