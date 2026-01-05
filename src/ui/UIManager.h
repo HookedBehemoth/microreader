@@ -17,6 +17,7 @@ class FileBrowserScreen;
 class ImageViewerScreen;
 class TextViewerScreen;
 class PkPassViewerScreen;
+class SettingsScreen;
 
 // Hash function for enum class
 struct EnumClassHash {
@@ -31,7 +32,7 @@ class Settings;
 class UIManager {
  public:
   // Typed screen identifiers so callers don't use raw indices
-  enum class ScreenId { FileBrowser, ImageViewer, TextViewer, PkPassViewer, Count };
+  enum class ScreenId { FileBrowser, ImageViewer, TextViewer, PkPassViewer, Settings, Count };
 
   // Constructor
   UIManager(EInkDisplay& display, class SDCardManager& sdManager);
@@ -57,6 +58,7 @@ class UIManager {
   TextRenderer textRenderer;
 
   ScreenId currentScreen = ScreenId::FileBrowser;
+  ScreenId previousScreen = ScreenId::FileBrowser;
 
   // Map holding owning pointers to the screens; screens are
   // constructed in the .cpp ctor and live for the UIManager lifetime.
@@ -68,6 +70,18 @@ class UIManager {
  public:
   Settings& getSettings() {
     return *settings;
+  }
+
+  Screen* getScreen(ScreenId id) {
+    auto it = screens.find(id);
+    if (it != screens.end()) {
+      return it->second.get();
+    }
+    return nullptr;
+  }
+
+  ScreenId getPreviousScreen() const {
+    return previousScreen;
   }
 };
 

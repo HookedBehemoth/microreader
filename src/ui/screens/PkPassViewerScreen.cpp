@@ -2,14 +2,16 @@
 
 #include <Arduino.h>
 #include <qrcode.h>
+#include <content/pkpass/pkpass_parser.h>
 #include <core/SDCardManager.h>
-#include "../../content/pkpass/pkpass_parser.h"
-#include "../../rendering/TextRenderer.h"
-#include "../../resources/fonts/FontDefinitions.h"
-#include "../../core/EInkDisplay.h"
-#include "../../core/Settings.h"
-#include "../../core/Buttons.h"
-#include "../../resources/images/test_image.h"
+#include <core/EInkDisplay.h>
+#include <core/Settings.h>
+#include <core/Buttons.h>
+#include <resources/images/test_image.h>
+#include <resources/fonts/other/MenuFontBig.h>
+#include <resources/fonts/other/MenuFontSmall.h>
+#include <rendering/TextRenderer.h>
+#include <resources/fonts/FontManager.h>
 
 static const int NUM_SCREENS = 4;
 
@@ -76,7 +78,7 @@ void PkPassViewerScreen::show() {
   
   // Setup text renderer
   TextRenderer textRenderer(display);
-  textRenderer.setFont(&Font27);
+  textRenderer.setFont(getTitleFont());
   textRenderer.setTextColor(TextRenderer::COLOR_BLACK);  // Black text
   
   // Set framebuffer to BW buffer for rendering
@@ -99,7 +101,7 @@ void PkPassViewerScreen::show() {
   }
   
   if (passInfo.serial_number[0] != '\0') {
-    textRenderer.setFont(&Font14);
+    textRenderer.setFont(&MenuFontBig);
     textRenderer.setCursor(20, textY);
     textRenderer.print(passInfo.serial_number);
     textY += 30;
@@ -129,7 +131,7 @@ void PkPassViewerScreen::show() {
     
     // Display barcode alt text below QR code if available
     if (passInfo.barcode.alt_text[0] != '\0') {
-      textRenderer.setFont(&Font14);
+      textRenderer.setFont(&MenuFontSmall);
       int16_t x1, y1;
       uint16_t w, h;
       textRenderer.getTextBounds(passInfo.barcode.alt_text, 0, 0, &x1, &y1, &w, &h);
@@ -141,7 +143,7 @@ void PkPassViewerScreen::show() {
     }
   } else {
     // No QR code data - display message
-    textRenderer.setFont(&Font27);
+    textRenderer.setFont(getTitleFont());
     const char* msg = "No QR Code Available";
     int16_t x1, y1;
     uint16_t w, h;

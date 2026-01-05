@@ -7,6 +7,7 @@
 #include "ui/screens/FileBrowserScreen.h"
 #include "ui/screens/ImageViewerScreen.h"
 #include "ui/screens/PkPassViewerScreen.h"
+#include "ui/screens/SettingsScreen.h"
 #include "ui/screens/TextViewerScreen.h"
 
 UIManager::UIManager(EInkDisplay& display, SDCardManager& sdManager)
@@ -21,6 +22,7 @@ UIManager::UIManager(EInkDisplay& display, SDCardManager& sdManager)
       std::unique_ptr<Screen>(new PkPassViewerScreen(display, sdManager, *this));
   screens[ScreenId::TextViewer] =
       std::unique_ptr<Screen>(new TextViewerScreen(display, textRenderer, sdManager, *this));
+  screens[ScreenId::Settings] = std::unique_ptr<Screen>(new SettingsScreen(display, textRenderer, *this));
   Serial.printf("[%lu] UIManager: Constructor called\n", millis());
 }
 
@@ -44,6 +46,8 @@ void UIManager::begin() {
 
   // Restore last-visible screen (use consolidated settings when available)
   currentScreen = ScreenId::FileBrowser;
+  ScreenId savedPreviousScreen = ScreenId::FileBrowser;
+
   if (sdManager.ready() && settings) {
     int saved = 0;
     if (settings->getInt(String("ui.screen"), saved)) {
@@ -56,12 +60,24 @@ void UIManager::begin() {
     } else {
       Serial.printf("[%lu] UIManager: No saved screen state found; using default\n", millis());
     }
+
+    // Restore previous screen (will apply after showScreen)
+    int prevSaved = 0;
+    if (settings->getInt(String("ui.previousScreen"), prevSaved)) {
+      if (prevSaved >= 0 && prevSaved <= static_cast<int>(ScreenId::Settings)) {
+        savedPreviousScreen = static_cast<ScreenId>(prevSaved);
+        Serial.printf("[%lu] UIManager: Restored previous screen %d from settings\n", millis(), prevSaved);
+      }
+    }
   } else {
     Serial.printf("[%lu] UIManager: SD not ready; using default start screen\n", millis());
   }
 
   Serial.printf("[%lu] UIManager: Showing initial screen %d\n", millis(), static_cast<int>(currentScreen));
   showScreen(currentScreen);
+
+  // Apply saved previousScreen after showScreen (which modifies previousScreen)
+  previousScreen = savedPreviousScreen;
 
   Serial.printf("[%lu] UIManager initialized\n", millis());
 }
@@ -112,6 +128,7 @@ void UIManager::prepareForSleep() {
     Serial.printf("[%lu] UIManager: Saving current screen %d to settings\n", millis(),
                   static_cast<int>(currentScreen));
     settings->setInt(String("ui.screen"), static_cast<int>(currentScreen));
+    settings->setInt(String("ui.previousScreen"), static_cast<int>(previousScreen));
     if (!settings->save()) {
       Serial.println("UIManager: Failed to write settings.cfg to SD");
     }
@@ -134,6 +151,7 @@ void UIManager::openPkPassFile(const String& sdPath) {
 
 void UIManager::showScreen(ScreenId id) {
   // Directly show the requested screen (assumed present)
+  previousScreen = currentScreen;
   currentScreen = id;
   // Call activate so screens can perform any work needed when they become
   // active (this also ensures TextViewerScreen::activate is invoked to open
