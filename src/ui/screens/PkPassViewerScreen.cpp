@@ -120,11 +120,14 @@ void PkPassViewerScreen::show() {
     const int qr_x = (EInkDisplay::DISPLAY_WIDTH - qr_pixel_size) / 2;
     const int qr_y = (EInkDisplay::DISPLAY_HEIGHT - qr_pixel_size) / 2;
     
-    // Draw QR code
+    // Draw QR code (rotated 90 degrees counterclockwise to match screen rotation)
     for (uint8_t cy = 0; cy < qrcode.size; cy++) {
       for (uint8_t cx = 0; cx < qrcode.size; cx++) {
         if (qrcode_getModule(&qrcode, cx, cy)) {
-          display.drawRectangle(qr_x + px * cx, qr_y + px * cy, px, px);
+          // Rotate 90 degrees counterclockwise: (x, y) -> (y, size - 1 - x)
+          uint8_t rot_x = cy;
+          uint8_t rot_y = qrcode.size - 1 - cx;
+          display.drawRectangle(qr_x + px * rot_x, qr_y + px * rot_y, px, px);
         }
       }
     }
