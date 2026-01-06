@@ -9,6 +9,7 @@
 #include "core/Buttons.h"
 #include "core/EInkDisplay.h"
 #include "core/SDCardManager.h"
+#include "core/SerialCLI.h"
 #include "rendering/SimpleFont.h"
 #include "resources/fonts/FontDefinitions.h"
 #include "resources/fonts/other/MenuFontSmall.h"
@@ -42,6 +43,7 @@ SDCardManager sdManager(EPD_SCLK, SD_SPI_MISO, EPD_MOSI, SD_SPI_CS, EINK_SPI_CS)
 #define BAT_GPIO0 0
 BatteryMonitor g_battery(BAT_GPIO0);
 UIManager uiManager(einkDisplay, sdManager);
+SerialCLI serialCLI;
 
 // Button update task - runs continuously to keep button state fresh
 void buttonUpdateTask(void* parameter) {
@@ -174,16 +176,22 @@ void setup() {
   uiManager.begin();
 
   Serial.println("Initialization complete!\n");
+  
+  // Initialize serial CLI
+  serialCLI.begin();
 }
 
 void loop() {
-  // Print memory stats every second
+  // Print memory stats every 4 seconds
   static unsigned long lastMemPrint = 0;
   if (Serial && millis() - lastMemPrint >= 4000) {
     Serial.printf("[%lu] Memory - Free: %d bytes, Total: %d bytes, Min Free: %d bytes\n", millis(), ESP.getFreeHeap(),
                   ESP.getHeapSize(), ESP.getMinFreeHeap());
     lastMemPrint = millis();
   }
+
+  // Handle serial commands
+  serialCLI.update();
 
   // Button state is updated by background task
   uiManager.handleButtons(buttons);
