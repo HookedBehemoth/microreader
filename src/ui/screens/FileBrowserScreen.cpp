@@ -40,7 +40,7 @@ void FileBrowserScreen::activate() {
   // Load and apply UI font settings
   Settings& s = uiManager.getSettings();
   int uiFontSize = 0;
-  if (s.getInt(String("settings.uiFontSize"), uiFontSize)) {
+  if (s.getInt(IntSetting::UI_FONT_SIZE, uiFontSize)) {
     if (uiFontSize == 0) {
       setMainFont(&MenuFontSmall);
       setTitleFont(&MenuHeader);
@@ -190,7 +190,7 @@ void FileBrowserScreen::offsetSelection(int offset) {
   if (!sdFiles.empty()) {
     Settings& s = uiManager.getSettings();
     auto& sdFile = sdFiles[sdSelectedIndex];
-    s.setString(String("filebrowser.selected"), sdFile.name);
+    s.setString(PathSetting::FILEBROWSER_SELECTED, sdFile.name);
   }
 
   show();
@@ -242,10 +242,10 @@ void FileBrowserScreen::loadFolder(int maxFiles) {
   sdScrollOffset = 0;
   if (!sdFiles.empty()) {
     Settings& s = uiManager.getSettings();
-    String saved = s.getString(String("filebrowser.selected"), String(""));
-    if (saved.length() > 0) {
+    std::string_view saved = s.getString(PathSetting::FILEBROWSER_SELECTED);
+    if (!saved.empty()) {
       for (size_t i = 0; i < sdFiles.size(); ++i) {
-        if (sdFiles[i].name == saved) {
+        if (sdFiles[i].name == String(saved.data())) {
           sdSelectedIndex = (int)i;
           if (sdSelectedIndex >= SD_LINES_PER_SCREEN)
             sdScrollOffset = sdSelectedIndex - SD_LINES_PER_SCREEN + 1;

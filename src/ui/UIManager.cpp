@@ -50,7 +50,7 @@ void UIManager::begin() {
 
   if (sdManager.ready() && settings) {
     int saved = 0;
-    if (settings->getInt(String("ui.screen"), saved)) {
+    if (settings->getInt(IntSetting::UI_SCREEN, saved)) {
       if (saved >= 0 && saved < static_cast<int>(ScreenId::Count)) {
         currentScreen = static_cast<ScreenId>(saved);
         Serial.printf("[%lu] UIManager: Restored screen %d from settings\n", millis(), saved);
@@ -63,7 +63,7 @@ void UIManager::begin() {
 
     // Restore previous screen (will apply after showScreen)
     int prevSaved = 0;
-    if (settings->getInt(String("ui.previousScreen"), prevSaved)) {
+    if (settings->getInt(IntSetting::UI_PREVIOUS_SCREEN, prevSaved)) {
       if (prevSaved >= 0 && prevSaved <= static_cast<int>(ScreenId::Settings)) {
         savedPreviousScreen = static_cast<ScreenId>(prevSaved);
         Serial.printf("[%lu] UIManager: Restored previous screen %d from settings\n", millis(), prevSaved);
@@ -127,8 +127,8 @@ void UIManager::prepareForSleep() {
   if (sdManager.ready() && settings) {
     Serial.printf("[%lu] UIManager: Saving current screen %d to settings\n", millis(),
                   static_cast<int>(currentScreen));
-    settings->setInt(String("ui.screen"), static_cast<int>(currentScreen));
-    settings->setInt(String("ui.previousScreen"), static_cast<int>(previousScreen));
+    settings->setInt(IntSetting::UI_SCREEN, static_cast<int>(currentScreen));
+    settings->setInt(IntSetting::UI_PREVIOUS_SCREEN, static_cast<int>(previousScreen));
     if (!settings->save()) {
       Serial.println("UIManager: Failed to write settings.cfg to SD");
     }

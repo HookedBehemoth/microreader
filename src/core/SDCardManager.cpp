@@ -150,7 +150,7 @@ size_t SDCardManager::readFileToBuffer(const char* path, char* buffer, size_t bu
   return total;
 }
 
-bool SDCardManager::writeFile(const char* path, const String& content) {
+bool SDCardManager::writeFile(const char* path, std::string_view content) {
   if (!initialized) {
     Serial.println("SDCardManager: not initialized; cannot write file");
     return false;
@@ -167,9 +167,9 @@ bool SDCardManager::writeFile(const char* path, const String& content) {
     return false;
   }
 
-  size_t written = f.print(content);
+  size_t written = f.write(reinterpret_cast<const uint8_t*>(content.data()), content.size());
   f.close();
-  return (written == content.length());
+  return (written == content.size());
 }
 
 bool SDCardManager::ensureDirectoryExists(const char* path) {

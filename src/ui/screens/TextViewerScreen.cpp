@@ -50,9 +50,9 @@ TextViewerScreen::~TextViewerScreen() {
 void TextViewerScreen::begin() {
   // Load last opened file path if present
   Settings& s = uiManager.getSettings();
-  String savedPath = s.getString(String("textviewer.lastPath"), String(""));
-  if (savedPath.length() > 0) {
-    pendingOpenPath = savedPath;
+  std::string_view savedPath = s.getString(PathSetting::TEXTVIEWER_LAST_PATH);
+  if (!savedPath.empty()) {
+    pendingOpenPath = String(savedPath.data());
   }
 }
 
@@ -63,16 +63,16 @@ void TextViewerScreen::loadSettingsFromFile() {
 
   // Apply layout config from Settings
   int margin = 10;
-  if (s.getInt(String("settings.margin"), margin)) {
+  if (s.getInt(IntSetting::MARGIN, margin)) {
     layoutConfig.marginLeft = margin;
     layoutConfig.marginRight = margin;
   }
 
   // Load font settings to determine base font height
   int fontFamily = 1;
-  s.getInt(String("settings.fontFamily"), fontFamily);
+  s.getInt(IntSetting::FONT_FAMILY, fontFamily);
   int fontSize = 0;
-  s.getInt(String("settings.fontSize"), fontSize);
+  s.getInt(IntSetting::FONT_SIZE, fontSize);
 
   // Map font size index to actual pixel height: 0=26, 1=28, 2=30
   int baseFontHeight = 26;
@@ -90,17 +90,17 @@ void TextViewerScreen::loadSettingsFromFile() {
 
   // Line height = font height + additional spacing from settings
   int lineSpacing = 4;  // Default spacing
-  if (s.getInt(String("settings.lineHeight"), lineSpacing)) {
+  if (s.getInt(IntSetting::LINE_HEIGHT, lineSpacing)) {
     layoutConfig.lineHeight = baseFontHeight + lineSpacing;
   }
 
   int alignment = 0;
-  if (s.getInt(String("settings.alignment"), alignment)) {
+  if (s.getInt(IntSetting::ALIGNMENT, alignment)) {
     layoutConfig.alignment = static_cast<LayoutStrategy::TextAlignment>(alignment);
   }
 
   int showChapterNumbersInt = 1;
-  if (s.getInt(String("settings.showChapterNumbers"), showChapterNumbersInt)) {
+  if (s.getInt(IntSetting::SHOW_CHAPTER_NUMBERS, showChapterNumbersInt)) {
     showChapterNumbers = (showChapterNumbersInt != 0);
   }
 }
@@ -109,7 +109,7 @@ void TextViewerScreen::saveSettingsToFile() {
   // Only save the last opened file path
   // Layout settings are managed by SettingsScreen
   Settings& s = uiManager.getSettings();
-  s.setString(String("textviewer.lastPath"), currentFilePath);
+  s.setString(PathSetting::TEXTVIEWER_LAST_PATH, currentFilePath);
 
   if (!s.save()) {
     Serial.println("TextViewerScreen: Failed to write settings.cfg");
@@ -532,12 +532,14 @@ void TextViewerScreen::savePositionToFile() {
   if (currentFilePath.length() == 0 || !provider)
     return;
   // Build pos file name by appending ".pos" to path
-  String posPath = currentFilePath + String(".pos");
+  char filePathBuf[256];
+  snprintf(filePathBuf, sizeof(filePathBuf), "%s.pos", currentFilePath.c_str());
   int idx = provider->getCurrentIndex();
   int chapter = provider->getCurrentChapter();
   // Format: chapter,position
-  String content = String(chapter) + "," + String(idx);
-  if (!sdManager.writeFile(posPath.c_str(), content)) {
+  char buf[64];
+  int length = snprintf(buf, sizeof(buf), "%d,%d", chapter, idx);
+  if (!sdManager.writeFile(filePathBuf, std::string_view(buf, length))) {
     Serial.printf("Failed to save position for %s\n", currentFilePath.c_str());
   }
 }
@@ -545,9 +547,10 @@ void TextViewerScreen::savePositionToFile() {
 void TextViewerScreen::loadPositionFromFile() {
   if (currentFilePath.length() == 0)
     return;
-  String posPath = currentFilePath + String(".pos");
+  char filePathBuf[256];
+  snprintf(filePathBuf, sizeof(filePathBuf), "%s.pos", currentFilePath.c_str());
   char buf[64];
-  size_t r = sdManager.readFileToBuffer(posPath.c_str(), buf, sizeof(buf));
+  size_t r = sdManager.readFileToBuffer(filePathBuf, buf, sizeof(buf));
 
   if (r > 0) {
     buf[sizeof(buf) - 1] = '\0';

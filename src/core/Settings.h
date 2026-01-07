@@ -1,10 +1,31 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
-#include <map>
-#include <string>
-
+#include <array>
+#include <optional>
+#include <string_view>
 #include "core/SDCardManager.h"
+
+// Predefined setting keys
+enum class IntSetting {
+  MARGIN,
+  LINE_HEIGHT,
+  ALIGNMENT,
+  SHOW_CHAPTER_NUMBERS,
+  FONT_FAMILY,
+  FONT_SIZE,
+  UI_FONT_SIZE,
+  UI_SCREEN,
+  UI_PREVIOUS_SCREEN,
+  Count
+};
+
+enum class PathSetting {
+  FILEBROWSER_SELECTED,
+  TEXTVIEWER_LAST_PATH,
+  PKPASS_LAST_PATH,
+  Count
+};
 
 class Settings {
  public:
@@ -15,19 +36,18 @@ class Settings {
   // Persist current settings to SD
   bool save();
 
-  // Get/Set simple values
-  bool getInt(const String& key, int& out) const;
-  void setInt(const String& key, int v);
+  // Get/Set integer values
+  bool getInt(IntSetting key, int& out) const;
+  void setInt(IntSetting key, int v);
 
-  String getString(const String& key, const String& def = String("")) const;
-  void setString(const String& key, const String& value);
+  // Get/Set string values (paths up to 255 chars)
+  std::string_view getString(PathSetting key) const;
+  void setString(PathSetting key, const String& value);
 
   // (Positions are stored per-file as `.pos` files; not part of consolidated settings)
 
  private:
   SDCardManager& sd;
-  // Simple map of settings stored as string (use String for compatibility)
-  std::map<String, String> kv;
 
   void parseSettingsBuffer(const char* buf);
 };

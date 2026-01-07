@@ -28,9 +28,9 @@ void PkPassViewerScreen::loadSettingsFromFile() {
     return;
 
   Settings& s = uiManager.getSettings();
-  String savedPath = s.getString(String("pkpass.lastPath"), String(""));
-  if (savedPath.length() > 0) {
-    pendingOpenPath = savedPath;
+  std::string_view savedPath = s.getString(PathSetting::PKPASS_LAST_PATH);
+  if (!savedPath.empty()) {
+    pendingOpenPath = String(savedPath.data());
   }
 }
 
@@ -39,7 +39,7 @@ void PkPassViewerScreen::saveSettingsToFile() {
     return;
 
   Settings& s = uiManager.getSettings();
-  s.setString(String("pkpass.lastPath"), currentFilePath);
+  s.setString(PathSetting::PKPASS_LAST_PATH, currentFilePath);
 
   if (!s.save()) {
     Serial.println("PkPassViewerScreen: Failed to write settings.cfg");

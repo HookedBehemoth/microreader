@@ -57,11 +57,11 @@ void buttonUpdateTask(void* parameter) {
 // Write debug log to SD card
 void writeDebugLog() {
   esp_sleep_wakeup_cause_t w = esp_sleep_get_wakeup_cause();
-  String dbg = String("wakeup: ") + String((int)w) + "\n";
-  dbg += String("power_raw: ") + String(digitalRead(POWER_BUTTON_PIN)) + "\n";
+  char buf[64];
+  int length = snprintf(buf, sizeof(buf), "wakeup: %d\npower_raw: %d\n", (int)w, digitalRead(POWER_BUTTON_PIN));
 
   if (sdManager.ready()) {
-    if (!sdManager.writeFile("/log.txt", dbg)) {
+    if (!sdManager.writeFile("/log.txt", std::string_view(buf, length))) {
       Serial.println("Failed to write log.txt to SD");
     }
   } else {

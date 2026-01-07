@@ -1,6 +1,6 @@
 #ifndef SDCARD_MANAGER_H
 #define SDCARD_MANAGER_H
-
+#include <string_view>
 #include <Arduino.h>
 
 #include <vector>
@@ -21,7 +21,7 @@ class SDCardManager {
   size_t readFileToBuffer(const char* path, char* buffer, size_t bufferSize, size_t maxBytes = 0);
   // Write a string to `path` on the SD card. Overwrites existing file.
   // Returns true on success.
-  bool writeFile(const char* path, const String& content);
+  bool writeFile(const char* path, std::string_view content);
   // Ensure a directory exists, creating it if necessary. Returns true on success.
   bool ensureDirectoryExists(const char* path);
 

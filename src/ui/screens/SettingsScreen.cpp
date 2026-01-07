@@ -164,7 +164,7 @@ void SettingsScreen::loadSettings() {
 
   // Load horizontal margins (applies to both left and right)
   int margin = 10;
-  if (s.getInt(String("settings.margin"), margin)) {
+  if (s.getInt(IntSetting::MARGIN, margin)) {
     for (int i = 0; i < marginValuesCount; i++) {
       if (marginValues[i] == margin) {
         marginIndex = i;
@@ -175,7 +175,7 @@ void SettingsScreen::loadSettings() {
 
   // Load line height
   int lineHeight = 30;
-  if (s.getInt(String("settings.lineHeight"), lineHeight)) {
+  if (s.getInt(IntSetting::LINE_HEIGHT, lineHeight)) {
     for (int i = 0; i < lineHeightValuesCount; i++) {
       if (lineHeightValues[i] == lineHeight) {
         lineHeightIndex = i;
@@ -186,31 +186,31 @@ void SettingsScreen::loadSettings() {
 
   // Load alignment
   int alignment = 0;
-  if (s.getInt(String("settings.alignment"), alignment)) {
+  if (s.getInt(IntSetting::ALIGNMENT, alignment)) {
     alignmentIndex = alignment;
   }
 
   // Load show chapter numbers
   int showChapters = 1;
-  if (s.getInt(String("settings.showChapterNumbers"), showChapters)) {
+  if (s.getInt(IntSetting::SHOW_CHAPTER_NUMBERS, showChapters)) {
     showChapterNumbersIndex = showChapters;
   }
 
   // Load font family (0=NotoSans, 1=Bookerly)
   int fontFamily = 1;
-  if (s.getInt(String("settings.fontFamily"), fontFamily)) {
+  if (s.getInt(IntSetting::FONT_FAMILY, fontFamily)) {
     fontFamilyIndex = fontFamily;
   }
 
   // Load font size (0=Small, 1=Medium, 2=Large)
   int fontSize = 0;
-  if (s.getInt(String("settings.fontSize"), fontSize)) {
+  if (s.getInt(IntSetting::FONT_SIZE, fontSize)) {
     fontSizeIndex = fontSize;
   }
 
   // Load UI font size (0=Small/14, 1=Large/28)
   int uiFontSize = 0;
-  if (s.getInt(String("settings.uiFontSize"), uiFontSize)) {
+  if (s.getInt(IntSetting::UI_FONT_SIZE, uiFontSize)) {
     uiFontSizeIndex = uiFontSize;
   }
 
@@ -222,13 +222,13 @@ void SettingsScreen::loadSettings() {
 void SettingsScreen::saveSettings() {
   Settings& s = uiManager.getSettings();
 
-  s.setInt(String("settings.margin"), marginValues[marginIndex]);
-  s.setInt(String("settings.lineHeight"), lineHeightValues[lineHeightIndex]);
-  s.setInt(String("settings.alignment"), alignmentIndex);
-  s.setInt(String("settings.showChapterNumbers"), showChapterNumbersIndex);
-  s.setInt(String("settings.fontFamily"), fontFamilyIndex);
-  s.setInt(String("settings.fontSize"), fontSizeIndex);
-  s.setInt(String("settings.uiFontSize"), uiFontSizeIndex);
+  s.setInt(IntSetting::MARGIN, marginValues[marginIndex]);
+  s.setInt(IntSetting::LINE_HEIGHT, lineHeightValues[lineHeightIndex]);
+  s.setInt(IntSetting::ALIGNMENT, alignmentIndex);
+  s.setInt(IntSetting::SHOW_CHAPTER_NUMBERS, showChapterNumbersIndex);
+  s.setInt(IntSetting::FONT_FAMILY, fontFamilyIndex);
+  s.setInt(IntSetting::FONT_SIZE, fontSizeIndex);
+  s.setInt(IntSetting::UI_FONT_SIZE, uiFontSizeIndex);
 
   if (!s.save()) {
     Serial.println("SettingsScreen: Failed to write settings.cfg");
