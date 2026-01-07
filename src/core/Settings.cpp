@@ -205,16 +205,15 @@ void Settings::parseSettingsBuffer(const char* buf) {
       auto intKey = IntKeyFromString(key);
       if (intKey) {
         intSettings[(int)*intKey] = atoi(val);
-        continue;
-      }
-
-      // Try to parse as path setting
-      auto pathKey = PathKeyFromString(key);
-      if (pathKey) {
-        std::array<char, 256> arr;
-        strncpy(arr.data(), val, 255);
-        arr[255] = '\0';
-        stringSettings[(int)*pathKey] = arr;
+      } else {
+        // Try to parse as path setting
+        auto pathKey = PathKeyFromString(key);
+        if (pathKey) {
+          std::array<char, 256> arr;
+          strncpy(arr.data(), val, 255);
+          arr[255] = '\0';
+          stringSettings[(int)*pathKey] = arr;
+        }
       }
     }
     if (!eol)
