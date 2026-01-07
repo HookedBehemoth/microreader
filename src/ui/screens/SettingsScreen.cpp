@@ -304,7 +304,7 @@ String SettingsScreen::getSettingValue(int index) {
 
 void SettingsScreen::applyFontSettings() {
   // Determine which font family to use based on settings
-  FontFamily* targetFamily = nullptr;
+  const FontFamily* targetFamily = nullptr;
 
   if (fontFamilyIndex == 0) {  // NotoSans
     switch (fontSizeIndex) {

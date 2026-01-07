@@ -3,8 +3,8 @@
 #include "rendering/SimpleFont.h"
 
 // Font family
-FontFamily* getCurrentFontFamily();
-void setCurrentFontFamily(FontFamily* family);
+const FontFamily* getCurrentFontFamily();
+void setCurrentFontFamily(const FontFamily* family);
 
 // Simple fonts
 const SimpleGFXfont* getMainFont();

@@ -6,13 +6,13 @@
 #include "other/MenuHeader.h"
 
 // Font family (default to Bookerly26)
-static FontFamily* currentFamily = &bookerly26Family;
+static const FontFamily* currentFamily = &bookerly26Family;
 
-FontFamily* getCurrentFontFamily() {
+const FontFamily* getCurrentFontFamily() {
   return currentFamily;
 }
 
-void setCurrentFontFamily(FontFamily* family) {
+void setCurrentFontFamily(const FontFamily* family) {
   if (family)
     currentFamily = family;
 }

@@ -42,12 +42,12 @@ extern const SimpleGFXfont Bookerly28BoldItalic;
 // MenuFontSmall, MenuHeader, MenuFontBig are included via FontDefinitions.cpp
 
 // Font families
-extern FontFamily notoSans26Family;
-extern FontFamily notoSans28Family;
-extern FontFamily notoSans30Family;
-extern FontFamily bookerly26Family;
-extern FontFamily bookerly28Family;
-extern FontFamily bookerly30Family;
-extern FontFamily menuFontSmallFamily;
-extern FontFamily menuHeaderFamily;
-extern FontFamily menuFontBigFamily;
+extern const FontFamily notoSans26Family;
+extern const FontFamily notoSans28Family;
+extern const FontFamily notoSans30Family;
+extern const FontFamily bookerly26Family;
+extern const FontFamily bookerly28Family;
+extern const FontFamily bookerly30Family;
+extern const FontFamily menuFontSmallFamily;
+extern const FontFamily menuHeaderFamily;
+extern const FontFamily menuFontBigFamily;

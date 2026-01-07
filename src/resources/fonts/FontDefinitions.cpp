@@ -34,7 +34,7 @@
 #include "other/MenuHeader.h"
 
 // Font families (group variants together)
-FontFamily notoSans26Family = {
+extern const FontFamily notoSans26Family = {
     "NotoSans26",
     &NotoSans26,           // regular
     &NotoSans26Bold,       // bold
@@ -42,7 +42,7 @@ FontFamily notoSans26Family = {
     &NotoSans26BoldItalic  // boldItalic
 };
 
-FontFamily notoSans28Family = {
+extern const FontFamily notoSans28Family = {
     "NotoSans28",
     &NotoSans28,           // regular
     &NotoSans28Bold,       // bold
@@ -50,7 +50,7 @@ FontFamily notoSans28Family = {
     &NotoSans28BoldItalic  // boldItalic
 };
 
-FontFamily notoSans30Family = {
+extern const FontFamily notoSans30Family = {
     "NotoSans30",
     &NotoSans30,           // regular
     &NotoSans30Bold,       // bold
@@ -58,7 +58,7 @@ FontFamily notoSans30Family = {
     &NotoSans30BoldItalic  // boldItalic
 };
 
-FontFamily bookerly26Family = {
+extern const FontFamily bookerly26Family = {
     "Bookerly26",
     &Bookerly26,           // regular
     &Bookerly26Bold,       // bold
@@ -66,7 +66,7 @@ FontFamily bookerly26Family = {
     &Bookerly26BoldItalic  // boldItalic
 };
 
-FontFamily bookerly28Family = {
+extern const FontFamily bookerly28Family = {
     "Bookerly28",
     &Bookerly28,           // regular
     &Bookerly28Bold,       // bold
@@ -74,7 +74,7 @@ FontFamily bookerly28Family = {
     &Bookerly28BoldItalic  // boldItalic
 };
 
-FontFamily bookerly30Family = {
+extern const FontFamily bookerly30Family = {
     "Bookerly30",
     &Bookerly30,           // regular
     &Bookerly30Bold,       // bold
@@ -83,6 +83,6 @@ FontFamily bookerly30Family = {
 };
 
 // Other fonts
-FontFamily menuFontSmallFamily = {"MenuFontSmall", &MenuFontSmall, nullptr, nullptr, nullptr};
-FontFamily menuHeaderFamily = {"MenuHeader", &MenuHeader, nullptr, nullptr, nullptr};
-FontFamily menuFontBigFamily = {"MenuFontBig", &MenuFontBig, nullptr, nullptr, nullptr};
+extern const FontFamily menuFontSmallFamily = {"MenuFontSmall", &MenuFontSmall, nullptr, nullptr, nullptr};
+extern const FontFamily menuHeaderFamily = {"MenuHeader", &MenuHeader, nullptr, nullptr, nullptr};
+extern const FontFamily menuFontBigFamily = {"MenuFontBig", &MenuFontBig, nullptr, nullptr, nullptr};

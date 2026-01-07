@@ -109,7 +109,7 @@ void TextRenderer::setFont(const SimpleGFXfont* f) {
   currentStyle = FontStyle::REGULAR;
 }
 
-void TextRenderer::setFontFamily(FontFamily* family) {
+void TextRenderer::setFontFamily(const FontFamily* family) {
   currentFamily = family;
   // Automatically set to the current style's variant
   currentFont = getFontVariant(family, currentStyle);
