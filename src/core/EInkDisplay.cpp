@@ -4,6 +4,14 @@
 #include <fstream>
 #include <vector>
 
+// Display SPI pins (custom pins, not hardware SPI defaults)
+#define EPD_DC 4     // Data/Command
+#define EPD_RST 5    // Reset
+#define EPD_BUSY 6   // Busy
+#define EPD_SCLK 8   // SPI Clock
+#define EPD_MOSI 10  // SPI MOSI (Master Out Slave In)
+#define EINK_SPI_CS 21  // EINK Chip Select
+
 // SSD1677 command definitions
 // Initialization and reset
 #define CMD_SOFT_RESET 0x12             // Soft reset
@@ -107,24 +115,6 @@ const unsigned char lut_grayscale_revert[] PROGMEM = {
     // Reserved
     0x00, 0x00};
 
-EInkDisplay::EInkDisplay(int8_t sclk, int8_t mosi, int8_t cs, int8_t dc, int8_t rst, int8_t busy)
-    : _sclk(sclk),
-      _mosi(mosi),
-      _cs(cs),
-      _dc(dc),
-      _rst(rst),
-      _busy(busy),
-      frameBuffer(nullptr),
-      frameBufferActive(nullptr),
-      customLutActive(false) {
-  Serial.printf("[%lu] EInkDisplay: Constructor called\n", millis());
-  Serial.printf("[%lu]   SCLK=%d, MOSI=%d, CS=%d, DC=%d, RST=%d, BUSY=%d\n", millis(), sclk, mosi, cs, dc, rst, busy);
-}
-
-EInkDisplay::~EInkDisplay() {
-  // No dynamic memory to clean up (buffers are statically allocated)
-}
-
 void EInkDisplay::begin() {
   Serial.printf("[%lu] EInkDisplay: begin() called\n", millis());
 
@@ -139,18 +129,18 @@ void EInkDisplay::begin() {
   Serial.printf("[%lu]   Initializing e-ink display driver...\n", millis());
 
   // Initialize SPI with custom pins
-  SPI.begin(_sclk, -1, _mosi, _cs);
+  SPI.begin(EPD_SCLK, -1, EPD_MOSI, EINK_SPI_CS);
   spiSettings = SPISettings(40000000, MSBFIRST, SPI_MODE0);  // MODE0 is standard for SSD1677
   Serial.printf("[%lu]   SPI initialized at 40 MHz, Mode 0\n", millis());
 
   // Setup GPIO pins
-  pinMode(_cs, OUTPUT);
-  pinMode(_dc, OUTPUT);
-  pinMode(_rst, OUTPUT);
-  pinMode(_busy, INPUT);
+  pinMode(EINK_SPI_CS, OUTPUT);
+  pinMode(EPD_DC, OUTPUT);
+  pinMode(EPD_RST, OUTPUT);
+  pinMode(EPD_BUSY, INPUT);
 
-  digitalWrite(_cs, HIGH);
-  digitalWrite(_dc, HIGH);
+  digitalWrite(EINK_SPI_CS, HIGH);
+  digitalWrite(EPD_DC, HIGH);
 
   Serial.printf("[%lu]   GPIO pins configured\n", millis());
 
@@ -169,45 +159,45 @@ void EInkDisplay::begin() {
 
 void EInkDisplay::resetDisplay() {
   Serial.printf("[%lu]   Resetting display...\n", millis());
-  digitalWrite(_rst, HIGH);
+  digitalWrite(EPD_RST, HIGH);
   delay(20);
-  digitalWrite(_rst, LOW);
+  digitalWrite(EPD_RST, LOW);
   delay(2);
-  digitalWrite(_rst, HIGH);
+  digitalWrite(EPD_RST, HIGH);
   delay(20);
   Serial.printf("[%lu]   Display reset complete\n", millis());
 }
 
 void EInkDisplay::sendCommand(uint8_t command) {
   SPI.beginTransaction(spiSettings);
-  digitalWrite(_dc, LOW);  // Command mode
-  digitalWrite(_cs, LOW);  // Select chip
+  digitalWrite(EPD_DC, LOW);       // Command mode
+  digitalWrite(EINK_SPI_CS, LOW);  // Select chip
   SPI.transfer(command);
-  digitalWrite(_cs, HIGH);  // Deselect chip
+  digitalWrite(EINK_SPI_CS, HIGH); // Deselect chip
   SPI.endTransaction();
 }
 
 void EInkDisplay::sendData(uint8_t data) {
   SPI.beginTransaction(spiSettings);
-  digitalWrite(_dc, HIGH);  // Data mode
-  digitalWrite(_cs, LOW);   // Select chip
+  digitalWrite(EPD_DC, HIGH);      // Data mode
+  digitalWrite(EINK_SPI_CS, LOW);  // Select chip
   SPI.transfer(data);
-  digitalWrite(_cs, HIGH);  // Deselect chip
+  digitalWrite(EINK_SPI_CS, HIGH); // Deselect chip
   SPI.endTransaction();
 }
 
 void EInkDisplay::sendData(const uint8_t* data, uint16_t length) {
   SPI.beginTransaction(spiSettings);
-  digitalWrite(_dc, HIGH);       // Data mode
-  digitalWrite(_cs, LOW);        // Select chip
-  SPI.writeBytes(data, length);  // Transfer all bytes
-  digitalWrite(_cs, HIGH);       // Deselect chip
+  digitalWrite(EPD_DC, HIGH);      // Data mode
+  digitalWrite(EINK_SPI_CS, LOW);  // Select chip
+  SPI.writeBytes(data, length);    // Transfer all bytes
+  digitalWrite(EINK_SPI_CS, HIGH); // Deselect chip
   SPI.endTransaction();
 }
 
 void EInkDisplay::waitWhileBusy(const char* comment) {
   unsigned long start = millis();
-  while (digitalRead(_busy) == HIGH) {
+  while (digitalRead(EPD_BUSY) == HIGH) {
     delay(1);
     if (millis() - start > 10000) {
       Serial.printf("[%lu]   Timeout waiting for busy%s\n", millis(), comment ? comment : "");

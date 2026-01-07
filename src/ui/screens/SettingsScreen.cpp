@@ -14,18 +14,11 @@
 constexpr int SettingsScreen::marginValues[];
 constexpr int SettingsScreen::lineHeightValues[];
 
-SettingsScreen::SettingsScreen(EInkDisplay& display, TextRenderer& renderer, UIManager& uiManager)
-    : display(display), textRenderer(renderer), uiManager(uiManager) {}
-
-void SettingsScreen::begin() {
-  loadSettings();
-}
-
 void SettingsScreen::handleButtons(Buttons& buttons) {
   if (buttons.isPressed(Buttons::BACK)) {
     saveSettings();
     // Return to the screen we came from
-    uiManager.showScreen(uiManager.getPreviousScreen());
+    g_uiManager.showScreen(g_uiManager.getPreviousScreen());
   } else if (buttons.isPressed(Buttons::LEFT)) {
     selectNext();
   } else if (buttons.isPressed(Buttons::RIGHT)) {
@@ -41,16 +34,17 @@ void SettingsScreen::activate() {
 
 void SettingsScreen::show() {
   renderSettings();
-  display.displayBuffer(EInkDisplay::FAST_REFRESH);
+  g_einkDisplay.displayBuffer(EInkDisplay::FAST_REFRESH);
 }
 
 void SettingsScreen::renderSettings() {
-  display.clearScreen(0xFF);
+  g_einkDisplay.clearScreen(0xFF);
+  TextRenderer textRenderer;
   textRenderer.setTextColor(TextRenderer::COLOR_BLACK);
   textRenderer.setFont(getTitleFont());
 
   // Set framebuffer to BW buffer for rendering
-  textRenderer.setFrameBuffer(display.getFrameBuffer());
+  textRenderer.setFrameBuffer(g_einkDisplay.getFrameBuffer());
   textRenderer.setBitmapType(TextRenderer::BITMAP_BW);
 
   // Center the title horizontally
@@ -92,7 +86,7 @@ void SettingsScreen::renderSettings() {
   // Draw battery percentage at bottom
   {
     textRenderer.setFont(&MenuFontSmall);  // Always use small font for battery
-    int pct = g_battery.readPercentage();
+    int pct = Battery::readPercentage();
     String pctStr = String(pct) + "%";
     int16_t bx1, by1;
     uint16_t bw, bh;
@@ -160,11 +154,9 @@ void SettingsScreen::toggleCurrentSetting() {
 }
 
 void SettingsScreen::loadSettings() {
-  Settings& s = uiManager.getSettings();
-
   // Load horizontal margins (applies to both left and right)
   int margin = 10;
-  if (s.getInt(IntSetting::MARGIN, margin)) {
+  if (Settings::getInt(IntSetting::MARGIN, margin)) {
     for (int i = 0; i < marginValuesCount; i++) {
       if (marginValues[i] == margin) {
         marginIndex = i;
@@ -175,7 +167,7 @@ void SettingsScreen::loadSettings() {
 
   // Load line height
   int lineHeight = 30;
-  if (s.getInt(IntSetting::LINE_HEIGHT, lineHeight)) {
+  if (Settings::getInt(IntSetting::LINE_HEIGHT, lineHeight)) {
     for (int i = 0; i < lineHeightValuesCount; i++) {
       if (lineHeightValues[i] == lineHeight) {
         lineHeightIndex = i;
@@ -186,31 +178,31 @@ void SettingsScreen::loadSettings() {
 
   // Load alignment
   int alignment = 0;
-  if (s.getInt(IntSetting::ALIGNMENT, alignment)) {
+  if (Settings::getInt(IntSetting::ALIGNMENT, alignment)) {
     alignmentIndex = alignment;
   }
 
   // Load show chapter numbers
   int showChapters = 1;
-  if (s.getInt(IntSetting::SHOW_CHAPTER_NUMBERS, showChapters)) {
+  if (Settings::getInt(IntSetting::SHOW_CHAPTER_NUMBERS, showChapters)) {
     showChapterNumbersIndex = showChapters;
   }
 
   // Load font family (0=NotoSans, 1=Bookerly)
   int fontFamily = 1;
-  if (s.getInt(IntSetting::FONT_FAMILY, fontFamily)) {
+  if (Settings::getInt(IntSetting::FONT_FAMILY, fontFamily)) {
     fontFamilyIndex = fontFamily;
   }
 
   // Load font size (0=Small, 1=Medium, 2=Large)
   int fontSize = 0;
-  if (s.getInt(IntSetting::FONT_SIZE, fontSize)) {
+  if (Settings::getInt(IntSetting::FONT_SIZE, fontSize)) {
     fontSizeIndex = fontSize;
   }
 
   // Load UI font size (0=Small/14, 1=Large/28)
   int uiFontSize = 0;
-  if (s.getInt(IntSetting::UI_FONT_SIZE, uiFontSize)) {
+  if (Settings::getInt(IntSetting::UI_FONT_SIZE, uiFontSize)) {
     uiFontSizeIndex = uiFontSize;
   }
 
@@ -220,17 +212,15 @@ void SettingsScreen::loadSettings() {
 }
 
 void SettingsScreen::saveSettings() {
-  Settings& s = uiManager.getSettings();
+  Settings::setInt(IntSetting::MARGIN, marginValues[marginIndex]);
+  Settings::setInt(IntSetting::LINE_HEIGHT, lineHeightValues[lineHeightIndex]);
+  Settings::setInt(IntSetting::ALIGNMENT, alignmentIndex);
+  Settings::setInt(IntSetting::SHOW_CHAPTER_NUMBERS, showChapterNumbersIndex);
+  Settings::setInt(IntSetting::FONT_FAMILY, fontFamilyIndex);
+  Settings::setInt(IntSetting::FONT_SIZE, fontSizeIndex);
+  Settings::setInt(IntSetting::UI_FONT_SIZE, uiFontSizeIndex);
 
-  s.setInt(IntSetting::MARGIN, marginValues[marginIndex]);
-  s.setInt(IntSetting::LINE_HEIGHT, lineHeightValues[lineHeightIndex]);
-  s.setInt(IntSetting::ALIGNMENT, alignmentIndex);
-  s.setInt(IntSetting::SHOW_CHAPTER_NUMBERS, showChapterNumbersIndex);
-  s.setInt(IntSetting::FONT_FAMILY, fontFamilyIndex);
-  s.setInt(IntSetting::FONT_SIZE, fontSizeIndex);
-  s.setInt(IntSetting::UI_FONT_SIZE, uiFontSizeIndex);
-
-  if (!s.save()) {
+  if (!Settings::save()) {
     Serial.println("SettingsScreen: Failed to write settings.cfg");
   }
 }

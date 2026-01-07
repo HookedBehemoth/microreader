@@ -1,5 +1,4 @@
-#ifndef UI_MANAGER_H
-#define UI_MANAGER_H
+#pragma once
 
 #include <memory>
 #include <unordered_map>
@@ -10,33 +9,10 @@
 #include "text/layout/LayoutStrategy.h"
 #include "ui/screens/Screen.h"
 
-class SDCardManager;
-
-// Forward-declare concrete screen types (global, not nested)
-class FileBrowserScreen;
-class ImageViewerScreen;
-class TextViewerScreen;
-class PkPassViewerScreen;
-class SettingsScreen;
-
-// Hash function for enum class
-struct EnumClassHash {
-  template <typename T>
-  std::size_t operator()(T t) const {
-    return static_cast<std::size_t>(t);
-  }
-};
-
-class Settings;
-
 class UIManager {
  public:
   // Typed screen identifiers so callers don't use raw indices
   enum class ScreenId { FileBrowser, ImageViewer, TextViewer, PkPassViewer, Settings, Count };
-
-  // Constructor
-  UIManager(EInkDisplay& display, class SDCardManager& sdManager);
-  ~UIManager();
 
   void begin();
   void handleButtons(Buttons& buttons);
@@ -53,36 +29,13 @@ class UIManager {
   void openPkPassFile(const String& sdPath);
 
  private:
-  EInkDisplay& display;
-  SDCardManager& sdManager;
-  TextRenderer textRenderer;
-
   ScreenId currentScreen = ScreenId::FileBrowser;
   ScreenId previousScreen = ScreenId::FileBrowser;
 
-  // Map holding owning pointers to the screens; screens are
-  // constructed in the .cpp ctor and live for the UIManager lifetime.
-  std::unordered_map<ScreenId, std::unique_ptr<Screen>, EnumClassHash> screens;
-
-  // Global settings manager (single consolidated settings file)
-  class Settings* settings = nullptr;
-
  public:
-  Settings& getSettings() {
-    return *settings;
-  }
-
-  Screen* getScreen(ScreenId id) {
-    auto it = screens.find(id);
-    if (it != screens.end()) {
-      return it->second.get();
-    }
-    return nullptr;
-  }
-
   ScreenId getPreviousScreen() const {
     return previousScreen;
   }
 };
 
-#endif
+extern UIManager g_uiManager;

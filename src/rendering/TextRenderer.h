@@ -23,24 +23,21 @@ class TextRenderer {
     BITMAP_GRAY_MSB   // Use the grayscale MSB bitmap
   };
 
-  // Constructor
-  TextRenderer(EInkDisplay& display);
-
   // Low-level pixel draw used by font blitting
   void drawPixel(int16_t x, int16_t y, bool state);
 
   // Set which framebuffer to write to
-  void setFrameBuffer(uint8_t* buffer);
+  void setFrameBuffer(uint8_t* buffer) { frameBuffer = buffer; }
 
   // Select which bitmap data to use from the font
-  void setBitmapType(BitmapType type);
+  void setBitmapType(BitmapType type) { bitmapType = type; }
 
   // Minimal API used by the rest of the project
   void setFont(const SimpleGFXfont* f = nullptr);
   void setFontFamily(const FontFamily* family);
   void setFontStyle(FontStyle style);
-  void setTextColor(uint16_t c);
-  void setCursor(int16_t x, int16_t y);
+  void setTextColor(uint16_t c) { textColor = c; }
+  void setCursor(int16_t x, int16_t y) { cursorX = x; cursorY = y; }
   size_t print(const char* s);
   size_t print(const String& s);
 
@@ -52,7 +49,6 @@ class TextRenderer {
   static const uint16_t COLOR_WHITE = 1;
 
  private:
-  EInkDisplay& display;
   const SimpleGFXfont* currentFont = nullptr;
   const FontFamily* currentFamily = nullptr;
   FontStyle currentStyle = FontStyle::REGULAR;

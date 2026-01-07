@@ -10,19 +10,12 @@ class UIManager;
 
 class SettingsScreen : public Screen {
  public:
-  SettingsScreen(EInkDisplay& display, TextRenderer& renderer, UIManager& uiManager);
-
-  void begin() override;
   void handleButtons(Buttons& buttons) override;
   void activate() override;
   void show() override;
   void shutdown() override {}
 
  private:
-  EInkDisplay& display;
-  TextRenderer& textRenderer;
-  UIManager& uiManager;
-
   // Menu navigation
   int selectedIndex = 0;
   static constexpr int SETTINGS_COUNT = 7;

@@ -1,15 +1,12 @@
-#ifndef FILE_BROWSER_SCREEN_H
-#define FILE_BROWSER_SCREEN_H
+#pragma once
 
 #include <Arduino.h>
 
 #include <vector>
 
-#include "../../core/EInkDisplay.h"
-#include "../../core/SDCardManager.h"
-#include "../../rendering/TextRenderer.h"
 #include "Screen.h"
-#include "../UIManager.h"
+
+class UIManager;
 
 struct SdFile {
   using OpenFn = void(UIManager::*)(const String&);
@@ -20,8 +17,6 @@ struct SdFile {
 
 class FileBrowserScreen : public Screen {
  public:
-  FileBrowserScreen(EInkDisplay& display, TextRenderer& renderer, SDCardManager& sdManager, UIManager& uiManager);
-  void begin() override;
   void show() override;
   void activate() override;
 
@@ -37,16 +32,9 @@ class FileBrowserScreen : public Screen {
   void loadFolder(int maxFiles = 200);
   void renderSdBrowser();
 
-  EInkDisplay& display;
-  TextRenderer& textRenderer;
-  SDCardManager& sdManager;
-  UIManager& uiManager;
-
   std::vector<SdFile> sdFiles;
   int sdSelectedIndex = 0;
   int sdScrollOffset = 0;
 
   static const int SD_LINES_PER_SCREEN = 8;
 };
-
-#endif

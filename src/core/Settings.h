@@ -1,10 +1,6 @@
-#ifndef SETTINGS_H
-#define SETTINGS_H
+#pragma once
 
-#include <array>
-#include <optional>
 #include <string_view>
-#include "core/SDCardManager.h"
 
 // Predefined setting keys
 enum class IntSetting {
@@ -27,29 +23,17 @@ enum class PathSetting {
   Count
 };
 
-class Settings {
- public:
-  explicit Settings(SDCardManager& sdManager);
-
+namespace Settings {
   // Load from /microreader/settings.cfg or import legacy settings
   bool load();
   // Persist current settings to SD
   bool save();
 
   // Get/Set integer values
-  bool getInt(IntSetting key, int& out) const;
+  bool getInt(IntSetting key, int& out);
   void setInt(IntSetting key, int v);
 
   // Get/Set string values (paths up to 255 chars)
-  std::string_view getString(PathSetting key) const;
-  void setString(PathSetting key, const String& value);
-
-  // (Positions are stored per-file as `.pos` files; not part of consolidated settings)
-
- private:
-  SDCardManager& sd;
-
-  void parseSettingsBuffer(const char* buf);
+  std::string_view getString(PathSetting key);
+  void setString(PathSetting key, std::string_view value);
 };
-
-#endif

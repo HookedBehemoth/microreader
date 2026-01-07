@@ -10,23 +10,18 @@
 #include <algorithm>
 #include <cstring>
 
-#include "../../core/BatteryMonitor.h"
-#include "../../core/Buttons.h"
-#include "../../core/Settings.h"
+#include <core/BatteryMonitor.h>
+#include <core/EInkDisplay.h>
+#include <core/SDCardManager.h>
+#include <rendering/TextRenderer.h>
+#include <core/Buttons.h>
+#include <core/Settings.h>
 #include "../UIManager.h"
-
-FileBrowserScreen::FileBrowserScreen(EInkDisplay& display, TextRenderer& renderer, SDCardManager& sdManager,
-                                     UIManager& uiManager)
-    : display(display), textRenderer(renderer), sdManager(sdManager), uiManager(uiManager) {}
-
-void FileBrowserScreen::begin() {
-  loadFolder();
-}
 
 // Ensure member function is in class scope
 void FileBrowserScreen::handleButtons(Buttons& buttons) {
   if (buttons.isPressed(Buttons::BACK)) {
-    uiManager.showScreen(UIManager::ScreenId::Settings);
+    g_uiManager.showScreen(UIManager::ScreenId::Settings);
   } else if (buttons.isPressed(Buttons::CONFIRM)) {
     confirm();
   } else if (buttons.isPressed(Buttons::LEFT)) {
@@ -38,9 +33,8 @@ void FileBrowserScreen::handleButtons(Buttons& buttons) {
 
 void FileBrowserScreen::activate() {
   // Load and apply UI font settings
-  Settings& s = uiManager.getSettings();
   int uiFontSize = 0;
-  if (s.getInt(IntSetting::UI_FONT_SIZE, uiFontSize)) {
+  if (Settings::getInt(IntSetting::UI_FONT_SIZE, uiFontSize)) {
     if (uiFontSize == 0) {
       setMainFont(&MenuFontSmall);
       setTitleFont(&MenuHeader);
@@ -55,16 +49,17 @@ void FileBrowserScreen::activate() {
 
 void FileBrowserScreen::show() {
   renderSdBrowser();
-  display.displayBuffer(EInkDisplay::FAST_REFRESH);
+  g_einkDisplay.displayBuffer(EInkDisplay::FAST_REFRESH);
 }
 
 void FileBrowserScreen::renderSdBrowser() {
-  display.clearScreen(0xFF);
+  g_einkDisplay.clearScreen(0xFF);
+  TextRenderer textRenderer;
   textRenderer.setTextColor(TextRenderer::COLOR_BLACK);
   textRenderer.setFont(getTitleFont());
 
   // Set framebuffer to BW buffer for rendering
-  textRenderer.setFrameBuffer(display.getFrameBuffer());
+  textRenderer.setFrameBuffer(g_einkDisplay.getFrameBuffer());
   textRenderer.setBitmapType(TextRenderer::BITMAP_BW);
 
   // Center the title horizontally (page width is 480 in portrait coordinate system)
@@ -137,7 +132,7 @@ void FileBrowserScreen::renderSdBrowser() {
   // Draw battery percentage at bottom-right of the screen
   {
     textRenderer.setFont(&MenuFontSmall);  // Always use small font for battery
-    int pct = g_battery.readPercentage();
+    int pct = Battery::readPercentage();
     String pctStr = String(pct) + "%";
     int16_t bx1, by1;
     uint16_t bw, bh;
@@ -157,7 +152,7 @@ void FileBrowserScreen::confirm() {
     Serial.printf("Selected file: %s\n", fullPath.c_str());
 
     // Ask UI manager to open the selected file in the text viewer
-    (uiManager.*(sdFile.callback))(fullPath);
+    (g_uiManager.*(sdFile.callback))(fullPath);
   }
 }
 
@@ -188,9 +183,8 @@ void FileBrowserScreen::offsetSelection(int offset) {
 
   // Persist the current selection into consolidated settings
   if (!sdFiles.empty()) {
-    Settings& s = uiManager.getSettings();
     auto& sdFile = sdFiles[sdSelectedIndex];
-    s.setString(PathSetting::FILEBROWSER_SELECTED, sdFile.name);
+    Settings::setString(PathSetting::FILEBROWSER_SELECTED, std::string_view(sdFile.name.c_str(), sdFile.name.length()));
   }
 
   show();
@@ -199,12 +193,12 @@ void FileBrowserScreen::offsetSelection(int offset) {
 void FileBrowserScreen::loadFolder(int maxFiles) {
   sdFiles.clear();
 
-  if (!sdManager.ready()) {
+  if (!g_sdManager.ready()) {
     Serial.println("SD not ready; cannot list files.");
     return;
   }
 
-  auto files = sdManager.listFiles("/", maxFiles);
+  auto files = g_sdManager.listFiles("/", maxFiles);
   for (auto& name : files) {
     // Include .txt and .epub files (case-insensitive)
     if (name.length() >= 4) {
@@ -241,8 +235,7 @@ void FileBrowserScreen::loadFolder(int maxFiles) {
   sdSelectedIndex = 0;
   sdScrollOffset = 0;
   if (!sdFiles.empty()) {
-    Settings& s = uiManager.getSettings();
-    std::string_view saved = s.getString(PathSetting::FILEBROWSER_SELECTED);
+    std::string_view saved = Settings::getString(PathSetting::FILEBROWSER_SELECTED);
     if (!saved.empty()) {
       for (size_t i = 0; i < sdFiles.size(); ++i) {
         if (sdFiles[i].name == String(saved.data())) {

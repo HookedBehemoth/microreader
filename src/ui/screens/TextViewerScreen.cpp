@@ -18,14 +18,10 @@
 #include "../../text/layout/KnuthPlassLayoutStrategy.h"
 #include "SettingsScreen.h"
 
-TextViewerScreen::TextViewerScreen(EInkDisplay& display, TextRenderer& renderer, SDCardManager& sdManager,
-                                   UIManager& uiManager)
-    : display(display),
-      textRenderer(renderer),
-      layoutStrategy(new KnuthPlassLayoutStrategy()),
-      // layoutStrategy(new GreedyLayoutStrategy()),
-      sdManager(sdManager),
-      uiManager(uiManager) {
+TextViewerScreen::TextViewerScreen()
+    : layoutStrategy(new KnuthPlassLayoutStrategy())
+    // layoutStrategy(new GreedyLayoutStrategy())
+{
   // Initialize layout config
   layoutConfig.marginLeft = 10;
   layoutConfig.marginRight = 10;
@@ -49,30 +45,25 @@ TextViewerScreen::~TextViewerScreen() {
 
 void TextViewerScreen::begin() {
   // Load last opened file path if present
-  Settings& s = uiManager.getSettings();
-  std::string_view savedPath = s.getString(PathSetting::TEXTVIEWER_LAST_PATH);
+  std::string_view savedPath = Settings::getString(PathSetting::TEXTVIEWER_LAST_PATH);
   if (!savedPath.empty()) {
     pendingOpenPath = String(savedPath.data());
   }
 }
 
 void TextViewerScreen::loadSettingsFromFile() {
-  // This method now just applies settings from the in-memory Settings object
-  // to the layout config. Settings are loaded from file once at startup by UIManager.
-  Settings& s = uiManager.getSettings();
-
   // Apply layout config from Settings
   int margin = 10;
-  if (s.getInt(IntSetting::MARGIN, margin)) {
+  if (Settings::getInt(IntSetting::MARGIN, margin)) {
     layoutConfig.marginLeft = margin;
     layoutConfig.marginRight = margin;
   }
 
   // Load font settings to determine base font height
   int fontFamily = 1;
-  s.getInt(IntSetting::FONT_FAMILY, fontFamily);
+  Settings::getInt(IntSetting::FONT_FAMILY, fontFamily);
   int fontSize = 0;
-  s.getInt(IntSetting::FONT_SIZE, fontSize);
+  Settings::getInt(IntSetting::FONT_SIZE, fontSize);
 
   // Map font size index to actual pixel height: 0=26, 1=28, 2=30
   int baseFontHeight = 26;
@@ -90,17 +81,17 @@ void TextViewerScreen::loadSettingsFromFile() {
 
   // Line height = font height + additional spacing from settings
   int lineSpacing = 4;  // Default spacing
-  if (s.getInt(IntSetting::LINE_HEIGHT, lineSpacing)) {
+  if (Settings::getInt(IntSetting::LINE_HEIGHT, lineSpacing)) {
     layoutConfig.lineHeight = baseFontHeight + lineSpacing;
   }
 
   int alignment = 0;
-  if (s.getInt(IntSetting::ALIGNMENT, alignment)) {
+  if (Settings::getInt(IntSetting::ALIGNMENT, alignment)) {
     layoutConfig.alignment = static_cast<LayoutStrategy::TextAlignment>(alignment);
   }
 
   int showChapterNumbersInt = 1;
-  if (s.getInt(IntSetting::SHOW_CHAPTER_NUMBERS, showChapterNumbersInt)) {
+  if (Settings::getInt(IntSetting::SHOW_CHAPTER_NUMBERS, showChapterNumbersInt)) {
     showChapterNumbers = (showChapterNumbersInt != 0);
   }
 }
@@ -108,10 +99,9 @@ void TextViewerScreen::loadSettingsFromFile() {
 void TextViewerScreen::saveSettingsToFile() {
   // Only save the last opened file path
   // Layout settings are managed by SettingsScreen
-  Settings& s = uiManager.getSettings();
-  s.setString(PathSetting::TEXTVIEWER_LAST_PATH, currentFilePath);
+  Settings::setString(PathSetting::TEXTVIEWER_LAST_PATH, std::string_view(currentFilePath.c_str(), currentFilePath.length()));
 
-  if (!s.save()) {
+  if (!Settings::save()) {
     Serial.println("TextViewerScreen: Failed to write settings.cfg");
   }
 }
@@ -136,10 +126,10 @@ void TextViewerScreen::handleButtons(Buttons& buttons) {
     // Save current position for the opened book (if any) before leaving
     savePositionToFile();
     saveSettingsToFile();
-    uiManager.showScreen(UIManager::ScreenId::FileBrowser);
+    g_uiManager.showScreen(UIManager::ScreenId::FileBrowser);
   } else if (buttons.isPressed(Buttons::CONFIRM)) {
     // Open settings
-    uiManager.showScreen(UIManager::ScreenId::Settings);
+    g_uiManager.showScreen(UIManager::ScreenId::Settings);
   } else if (buttons.isDown(Buttons::LEFT) || buttons.isDown(Buttons::VOLUME_UP)) {
     uint8_t btn = buttons.isDown(Buttons::LEFT) ? Buttons::LEFT : Buttons::VOLUME_UP;
     if (buttons.getHoldDuration(btn) >= LONG_PRESS_MS) {
@@ -181,8 +171,9 @@ void TextViewerScreen::showPage() {
   if (!provider) {
     // No provider available (no file open). Show a helpful message instead
     // of returning silently so the user knows why nothing is displayed.
-    display.clearScreen(0xFF);
+    g_einkDisplay.clearScreen(0xFF);
 
+    TextRenderer textRenderer;
     textRenderer.setTextColor(TextRenderer::COLOR_BLACK);
     textRenderer.setFontFamily(getCurrentFontFamily());
     textRenderer.setFontStyle(FontStyle::ITALIC);
@@ -195,11 +186,12 @@ void TextViewerScreen::showPage() {
     int16_t centerY = (800 - h) / 2;
     textRenderer.setCursor(centerX, centerY);
     textRenderer.print(msg);
-    display.displayBuffer(EInkDisplay::FAST_REFRESH);
+    g_einkDisplay.displayBuffer(EInkDisplay::FAST_REFRESH);
     return;
   }
 
-  display.clearScreen(0xFF);
+  g_einkDisplay.clearScreen(0xFF);
+  TextRenderer textRenderer;
   textRenderer.setTextColor(TextRenderer::COLOR_BLACK);
   textRenderer.setFontFamily(getCurrentFontFamily());
   textRenderer.setFontStyle(FontStyle::REGULAR);
@@ -222,7 +214,7 @@ void TextViewerScreen::showPage() {
   unsigned long renderStart = millis();
 
   // Render to BW buffer
-  textRenderer.setFrameBuffer(display.getFrameBuffer());
+  textRenderer.setFrameBuffer(g_einkDisplay.getFrameBuffer());
   textRenderer.setBitmapType(TextRenderer::BITMAP_BW);
   layoutStrategy->renderPage(layout, textRenderer, layoutConfig);
 
@@ -238,7 +230,7 @@ void TextViewerScreen::showPage() {
   // page indicator - now shows book-wide percentage
   {
     // Render to BW buffer
-    textRenderer.setFrameBuffer(display.getFrameBuffer());
+    textRenderer.setFrameBuffer(g_einkDisplay.getFrameBuffer());
     textRenderer.setBitmapType(TextRenderer::BITMAP_BW);
 
     // Use book-wide percentage for display
@@ -287,30 +279,31 @@ void TextViewerScreen::showPage() {
   }
 
   // display bw parts
-  display.displayBuffer(EInkDisplay::FAST_REFRESH);
+  g_einkDisplay.displayBuffer(EInkDisplay::FAST_REFRESH);
 
   // grayscale rendering
   {
+    TextRenderer textRenderer;
     textRenderer.setTextColor(TextRenderer::COLOR_BLACK);
     textRenderer.setFontFamily(getCurrentFontFamily());
     textRenderer.setFontStyle(FontStyle::REGULAR);
 
     // Render and copy to LSB buffer
-    display.clearScreen(0x00);
-    textRenderer.setFrameBuffer(display.getFrameBuffer());
+    g_einkDisplay.clearScreen(0x00);
+    textRenderer.setFrameBuffer(g_einkDisplay.getFrameBuffer());
     textRenderer.setBitmapType(TextRenderer::BITMAP_GRAY_LSB);
     layoutStrategy->renderPage(layout, textRenderer, layoutConfig);
-    display.copyGrayscaleLsbBuffers(display.getFrameBuffer());
+    g_einkDisplay.copyGrayscaleLsbBuffers(g_einkDisplay.getFrameBuffer());
 
     // Render and copy to MSB buffer
-    display.clearScreen(0x00);
-    textRenderer.setFrameBuffer(display.getFrameBuffer());
+    g_einkDisplay.clearScreen(0x00);
+    textRenderer.setFrameBuffer(g_einkDisplay.getFrameBuffer());
     textRenderer.setBitmapType(TextRenderer::BITMAP_GRAY_MSB);
     layoutStrategy->renderPage(layout, textRenderer, layoutConfig);
-    display.copyGrayscaleMsbBuffers(display.getFrameBuffer());
+    g_einkDisplay.copyGrayscaleMsbBuffers(g_einkDisplay.getFrameBuffer());
 
     // display grayscale part
-    display.displayGrayBuffer();
+    g_einkDisplay.displayGrayBuffer();
   }
 }
 
@@ -449,7 +442,7 @@ void TextViewerScreen::openFile(const String& sdPath) {
   // measure time taken to open file
   unsigned long startTime = millis();
 
-  if (!sdManager.ready()) {
+  if (!g_sdManager.ready()) {
     Serial.println("TextViewerScreen: SD not ready; cannot open file.");
     showErrorMessage("SD card not ready");
     return;
@@ -539,7 +532,7 @@ void TextViewerScreen::savePositionToFile() {
   // Format: chapter,position
   char buf[64];
   int length = snprintf(buf, sizeof(buf), "%d,%d", chapter, idx);
-  if (!sdManager.writeFile(filePathBuf, std::string_view(buf, length))) {
+  if (!g_sdManager.writeFile(filePathBuf, std::string_view(buf, length))) {
     Serial.printf("Failed to save position for %s\n", currentFilePath.c_str());
   }
 }
@@ -550,7 +543,7 @@ void TextViewerScreen::loadPositionFromFile() {
   char filePathBuf[256];
   snprintf(filePathBuf, sizeof(filePathBuf), "%s.pos", currentFilePath.c_str());
   char buf[64];
-  size_t r = sdManager.readFileToBuffer(filePathBuf, buf, sizeof(buf));
+  size_t r = g_sdManager.readFileToBuffer(filePathBuf, buf, sizeof(buf));
 
   if (r > 0) {
     buf[sizeof(buf) - 1] = '\0';
@@ -589,8 +582,9 @@ void TextViewerScreen::shutdown() {
 }
 
 void TextViewerScreen::showErrorMessage(const char* msg) {
-  display.clearScreen(0xFF);
+  g_einkDisplay.clearScreen(0xFF);
 
+  TextRenderer textRenderer;
   textRenderer.setTextColor(TextRenderer::COLOR_BLACK);
   textRenderer.setFontFamily(&bookerly26Family);
   textRenderer.setFontStyle(FontStyle::ITALIC);
@@ -603,5 +597,5 @@ void TextViewerScreen::showErrorMessage(const char* msg) {
   textRenderer.setCursor(centerX, centerY);
   textRenderer.print(msg);
 
-  display.displayBuffer(EInkDisplay::FAST_REFRESH);
+  g_einkDisplay.displayBuffer(EInkDisplay::FAST_REFRESH);
 }

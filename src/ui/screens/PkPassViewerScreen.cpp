@@ -15,33 +15,28 @@
 
 static const int NUM_SCREENS = 4;
 
-PkPassViewerScreen::PkPassViewerScreen(EInkDisplay& display, SDCardManager& sdCardManager, UIManager& uiManager)
-    : display(display), sdCardManager(sdCardManager), uiManager(uiManager) {}
-
 void PkPassViewerScreen::begin() {
   // Load persisted settings (last opened file) if present
   loadSettingsFromFile();
 }
 
 void PkPassViewerScreen::loadSettingsFromFile() {
-  if (!sdCardManager.ready())
+  if (!g_sdManager.ready())
     return;
 
-  Settings& s = uiManager.getSettings();
-  std::string_view savedPath = s.getString(PathSetting::PKPASS_LAST_PATH);
+  std::string_view savedPath = Settings::getString(PathSetting::PKPASS_LAST_PATH);
   if (!savedPath.empty()) {
     pendingOpenPath = String(savedPath.data());
   }
 }
 
 void PkPassViewerScreen::saveSettingsToFile() {
-  if (!sdCardManager.ready())
+  if (!g_sdManager.ready())
     return;
 
-  Settings& s = uiManager.getSettings();
-  s.setString(PathSetting::PKPASS_LAST_PATH, currentFilePath);
+  Settings::setString(PathSetting::PKPASS_LAST_PATH, std::string_view(currentFilePath.c_str(), currentFilePath.length()));
 
-  if (!s.save()) {
+  if (!Settings::save()) {
     Serial.println("PkPassViewerScreen: Failed to write settings.cfg");
   }
 }
@@ -64,12 +59,12 @@ void PkPassViewerScreen::handleButtons(Buttons& buttons) {
   if (buttons.isPressed(Buttons::BACK)) {
     // Save current file path before leaving
     saveSettingsToFile();
-    uiManager.showScreen(UIManager::ScreenId::FileBrowser);
+    g_uiManager.showScreen(UIManager::ScreenId::FileBrowser);
   }
 }
 
 void PkPassViewerScreen::show() {
-  display.clearScreen();
+  g_einkDisplay.clearScreen();
 
   // QR code parameters - Version 2 for lower resolution, 8px per module for similar size
   // Version 2 = 25x25 modules, at 8px = 200x200 pixels (vs Version 4 = 33x33 at 6px = 198x198)
@@ -77,12 +72,12 @@ void PkPassViewerScreen::show() {
   const uint8_t px = 12;  // pixels per module
   
   // Setup text renderer
-  TextRenderer textRenderer(display);
+  TextRenderer textRenderer;
   textRenderer.setFont(getTitleFont());
   textRenderer.setTextColor(TextRenderer::COLOR_BLACK);  // Black text
   
   // Set framebuffer to BW buffer for rendering
-  textRenderer.setFrameBuffer(display.getFrameBuffer());
+  textRenderer.setFrameBuffer(g_einkDisplay.getFrameBuffer());
   textRenderer.setBitmapType(TextRenderer::BITMAP_BW);
 
   // Display pass information at top
@@ -127,7 +122,7 @@ void PkPassViewerScreen::show() {
           // Rotate 90 degrees counterclockwise: (x, y) -> (y, size - 1 - x)
           uint8_t rot_x = cy;
           uint8_t rot_y = qrcode.size - 1 - cx;
-          display.drawRectangle(qr_x + px * rot_x, qr_y + px * rot_y, px, px);
+          g_einkDisplay.drawRectangle(qr_x + px * rot_x, qr_y + px * rot_y, px, px);
         }
       }
     }
@@ -154,8 +149,8 @@ void PkPassViewerScreen::show() {
     textRenderer.setCursor((EInkDisplay::DISPLAY_HEIGHT - w) / 2, EInkDisplay::DISPLAY_WIDTH / 2);
     textRenderer.print(msg);
   }
-  
-  display.displayBuffer(EInkDisplay::FAST_REFRESH);
+
+  g_einkDisplay.displayBuffer(EInkDisplay::FAST_REFRESH);
 }
 
 void PkPassViewerScreen::openFile(const String& path) {

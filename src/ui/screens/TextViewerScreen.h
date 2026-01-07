@@ -11,7 +11,7 @@
 
 class TextViewerScreen : public Screen {
  public:
-  TextViewerScreen(EInkDisplay& display, TextRenderer& renderer, SDCardManager& sdManager, UIManager& uiManager);
+  TextViewerScreen();
   ~TextViewerScreen();
 
   void begin() override;
@@ -40,11 +40,8 @@ class TextViewerScreen : public Screen {
   int pageEndIndex = 0;
 
  private:
-  EInkDisplay& display;
-  TextRenderer& textRenderer;
+  TextRenderer textRenderer;
   LayoutStrategy* layoutStrategy;
-  SDCardManager& sdManager;
-  UIManager& uiManager;
 
   WordProvider* provider = nullptr;
   // Keep the loaded text alive for the lifetime of the provider

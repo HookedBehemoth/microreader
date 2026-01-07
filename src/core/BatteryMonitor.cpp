@@ -2,28 +2,34 @@
 #include "BatteryMonitor.h"
 #include "esp_adc/adc_oneshot.h"
 
-BatteryMonitor::BatteryMonitor(uint8_t adcPin, float dividerMultiplier)
-  : _adcPin(adcPin), _dividerMultiplier(dividerMultiplier)
-{
+namespace {
+
+// Battery ADC pin and global instance
+constexpr uint8_t BatteryGpioPin = 0;
+// Voltage divider multiplier (e.g., 2.0 for 100k/100k divider)
+constexpr float BatteryDividerMultiplier = 2.0f;
+
 }
 
-uint16_t BatteryMonitor::readPercentage() const
+namespace Battery {
+
+uint16_t readPercentage()
 {
   return percentageFromMillivolts(readMillivolts());
 }
 
-uint16_t BatteryMonitor::readMillivolts() const
+uint16_t readMillivolts()
 {
-    uint32_t mv = analogReadMilliVolts(_adcPin);
-    return static_cast<uint32_t>(mv * _dividerMultiplier);
+    uint32_t mv = analogReadMilliVolts(BatteryGpioPin);
+    return static_cast<uint32_t>(mv * BatteryDividerMultiplier);
 }
 
-double BatteryMonitor::readVolts() const
+double readVolts()
 {
   return static_cast<double>(readMillivolts()) / 1000.0;
 }
 
-uint16_t BatteryMonitor::percentageFromMillivolts(uint16_t millivolts)
+uint16_t percentageFromMillivolts(uint16_t millivolts)
 {
   double volts = millivolts / 1000.0;
   // Polynomial derived from LiPo samples
@@ -37,4 +43,6 @@ uint16_t BatteryMonitor::percentageFromMillivolts(uint16_t millivolts)
   y = min(y, 100.0);
   y = round(y);
   return static_cast<int>(y);
+}
+
 }

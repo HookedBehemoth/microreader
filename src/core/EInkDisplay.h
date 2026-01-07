@@ -1,5 +1,4 @@
-#ifndef EINK_DISPLAY_H
-#define EINK_DISPLAY_H
+#pragma once
 
 #ifdef ARDUINO
 #include <Arduino.h>
@@ -10,12 +9,6 @@
 
 class EInkDisplay {
  public:
-  // Constructor with pin configuration
-  EInkDisplay(int8_t sclk, int8_t mosi, int8_t cs, int8_t dc, int8_t rst, int8_t busy);
-
-  // Destructor
-  ~EInkDisplay();
-
   // Refresh modes (guarded to avoid redefinition in test builds)
   enum RefreshMode {
     FULL_REFRESH,  // Full refresh with complete waveform
@@ -67,24 +60,21 @@ class EInkDisplay {
   void saveFrameBufferAsPBM(const char* filename);
 
  private:
-  // Pin configuration
-  int8_t _sclk, _mosi, _cs, _dc, _rst, _busy;
-
   // Frame buffer (statically allocated)
   uint8_t frameBuffer0[BUFFER_SIZE];
   uint8_t frameBuffer1[BUFFER_SIZE];
 
-  uint8_t* frameBuffer;
-  uint8_t* frameBufferActive;
+  uint8_t* frameBuffer = nullptr;
+  uint8_t* frameBufferActive = nullptr;
 
   // SPI settings
   SPISettings spiSettings;
 
   // State
-  bool isScreenOn;
-  bool customLutActive;
-  bool inGrayscaleMode;
-  bool drawGrayscale;
+  bool isScreenOn = false;
+  bool customLutActive = false;
+  bool inGrayscaleMode = false;
+  bool drawGrayscale = false;
 
   // Low-level display control
   void resetDisplay();
@@ -99,4 +89,4 @@ class EInkDisplay {
   void writeRamBuffer(uint8_t ramBuffer, const uint8_t* data, uint32_t size);
 };
 
-#endif
+extern EInkDisplay g_einkDisplay;

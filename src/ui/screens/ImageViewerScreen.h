@@ -7,15 +7,10 @@
 
 class ImageViewerScreen : public Screen {
  public:
-  ImageViewerScreen(EInkDisplay& display, UIManager& uiManager);
-
   void handleButtons(class Buttons& buttons) override;
   void show() override;
 
  private:
-  EInkDisplay& display;
-  UIManager& uiManager;
-
   int index = 0;
 };
 

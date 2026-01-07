@@ -1,5 +1,8 @@
 #include "Settings.h"
 #include <cstring>
+#include <array>
+#include <optional>
+#include <core/SDCardManager.h>
 
 #include <Arduino.h>
 
@@ -67,16 +70,18 @@ namespace {
     }
     return "";
   }
+
+  void parseSettingsBuffer(const char* buf);
 }
 
-Settings::Settings(SDCardManager& sdManager) : sd(sdManager) {}
+namespace Settings {
 
-bool Settings::load() {
-  if (!sd.ready())
+bool load() {
+  if (!g_sdManager.ready())
     return false;
 
   char buf[2048];
-  size_t r = sd.readFileToBuffer(SettingsPath, buf, sizeof(buf));
+  size_t r = g_sdManager.readFileToBuffer(SettingsPath, buf, sizeof(buf));
   if (r == 0) {
     // Reset all settings
     for (int i = 0; i < INT_SETTING_COUNT; i++) {
@@ -94,8 +99,8 @@ bool Settings::load() {
   return true;
 }
 
-bool Settings::save() {
-  if (!sd.ready())
+bool save() {
+  if (!g_sdManager.ready())
     return false;
   
   char buf[2048];
@@ -125,10 +130,10 @@ bool Settings::save() {
   }
   
   *p = '\0';
-  return sd.writeFile(SettingsPath, std::string_view(buf, p - buf));
+  return g_sdManager.writeFile(SettingsPath, std::string_view(buf, p - buf));
 }
 
-bool Settings::getInt(IntSetting key, int& out) const {
+bool getInt(IntSetting key, int& out) {
   int idx = (int)key;
   if (idx >= 0 && idx < (int)IntSetting::Count && intSettings[idx].has_value()) {
     out = intSettings[idx].value();
@@ -137,14 +142,14 @@ bool Settings::getInt(IntSetting key, int& out) const {
   return false;
 }
 
-void Settings::setInt(IntSetting key, int v) {
+void setInt(IntSetting key, int v) {
   int idx = (int)key;
   if (idx >= 0 && idx < (int)IntSetting::Count) {
     intSettings[idx] = v;
   }
 }
 
-std::string_view Settings::getString(PathSetting key) const {
+std::string_view getString(PathSetting key) {
   int idx = (int)key;
   if (idx >= 0 && idx < (int)PathSetting::Count && stringSettings[idx].has_value()) {
     return std::string_view(stringSettings[idx].value().data());
@@ -152,17 +157,21 @@ std::string_view Settings::getString(PathSetting key) const {
   return std::string_view();
 }
 
-void Settings::setString(PathSetting key, const String& value) {
+void setString(PathSetting key, std::string_view value) {
   int idx = (int)key;
   if (idx >= 0 && idx < (int)PathSetting::Count) {
     std::array<char, 256> arr;
-    strncpy(arr.data(), value.c_str(), 255);
+    strncpy(arr.data(), value.data(), 255);
     arr[255] = '\0';
     stringSettings[idx] = arr;
   }
 }
 
-void Settings::parseSettingsBuffer(const char* buf) {
+}
+
+namespace {
+
+void parseSettingsBuffer(const char* buf) {
   // Reset all settings
   for (int i = 0; i < INT_SETTING_COUNT; i++) {
     intSettings[i].reset();
@@ -220,4 +229,6 @@ void Settings::parseSettingsBuffer(const char* buf) {
       break;
     p = eol + 1;
   }
+}
+
 }

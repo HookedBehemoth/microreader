@@ -3,27 +3,16 @@
 
 #include <Arduino.h>
 
-class BatteryMonitor {
- public:
-  // Optional divider multiplier parameter defaults to 2.0
-  explicit BatteryMonitor(uint8_t adcPin, float dividerMultiplier = 2.0f);
-
+namespace Battery {
   // Read voltage and return percentage (0-100)
-  uint16_t readPercentage() const;
+  uint16_t readPercentage();
 
   // Read the battery voltage in millivolts (accounts for divider)
-  uint16_t readMillivolts() const;
+  uint16_t readMillivolts();
 
   // Read the battery voltage in volts (accounts for divider)
-  double readVolts() const;
+  double readVolts();
 
   // Percentage (0-100) from a millivolt value
-  static uint16_t percentageFromMillivolts(uint16_t millivolts);
-
- private:
-  uint8_t _adcPin;
-  float _dividerMultiplier;
+  uint16_t percentageFromMillivolts(uint16_t millivolts);
 };
-
-// Global battery monitor instance (define in one translation unit, e.g. `main.cpp`)
-extern BatteryMonitor g_battery;

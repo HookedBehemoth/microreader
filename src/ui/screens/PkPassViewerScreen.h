@@ -7,8 +7,6 @@
 
 class PkPassViewerScreen : public Screen {
  public:
-  PkPassViewerScreen(EInkDisplay& display, SDCardManager& sdCardManager, UIManager& uiManager);
-
   void begin();
   void activate() override;
   void shutdown() override;
@@ -22,9 +20,6 @@ class PkPassViewerScreen : public Screen {
   void loadSettingsFromFile();
   void saveSettingsToFile();
 
-  EInkDisplay& display;
-  UIManager& uiManager;
-  SDCardManager& sdCardManager;
   bool hasQRCode = false;
   pkpass_info passInfo = {};
   String currentFilePath;

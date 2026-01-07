@@ -62,10 +62,6 @@ static uint32_t decodeUtf8Codepoint(const unsigned char*& p) {
   return UTF8_REPLACEMENT_CHAR;
 }
 
-TextRenderer::TextRenderer(EInkDisplay& display) : display(display) {
-  Serial.printf("[%lu] TextRenderer: Constructor called\n", millis());
-}
-
 void TextRenderer::drawPixel(int16_t x, int16_t y, bool state) {
   // Early return if no framebuffer is set
   if (!frameBuffer) {
@@ -94,14 +90,6 @@ void TextRenderer::drawPixel(int16_t x, int16_t y, bool state) {
   }
 }
 
-void TextRenderer::setFrameBuffer(uint8_t* buffer) {
-  frameBuffer = buffer;
-}
-
-void TextRenderer::setBitmapType(BitmapType type) {
-  bitmapType = type;
-}
-
 void TextRenderer::setFont(const SimpleGFXfont* f) {
   currentFont = f;
   // Reset family and style when setting a single font directly
@@ -120,15 +108,6 @@ void TextRenderer::setFontStyle(FontStyle style) {
   if (currentFamily) {
     currentFont = getFontVariant(currentFamily, style);
   }
-}
-
-void TextRenderer::setTextColor(uint16_t c) {
-  textColor = c;
-}
-
-void TextRenderer::setCursor(int16_t x, int16_t y) {
-  cursorX = x;
-  cursorY = y;
 }
 
 size_t TextRenderer::print(const char* s) {

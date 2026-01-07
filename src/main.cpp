@@ -10,6 +10,7 @@
 #include "core/EInkDisplay.h"
 #include "core/SDCardManager.h"
 #include "core/SerialCLI.h"
+#include "core/Settings.h"
 #include "rendering/SimpleFont.h"
 #include "resources/fonts/FontDefinitions.h"
 #include "resources/fonts/other/MenuFontSmall.h"
@@ -24,25 +25,10 @@ const unsigned long POWER_BUTTON_WAKEUP_MS = 250;  // Time required to confirm b
 // Power button pin (used in multiple places)
 const int POWER_BUTTON_PIN = 3;
 
-// Display SPI pins (custom pins, not hardware SPI defaults)
-#define EPD_SCLK 8   // SPI Clock
-#define EPD_DC 4     // Data/Command
-#define EPD_RST 5    // Reset
-#define EPD_BUSY 6   // Busy
-#define EPD_MOSI 10  // SPI MOSI (Master Out Slave In)
-
-#define SD_SPI_CS 12  // SD Card Chip Select
-#define SD_SPI_MISO 7
-
-#define EINK_SPI_CS 21  // EINK Chip Select
-
 Buttons buttons;
-EInkDisplay einkDisplay(EPD_SCLK, EPD_MOSI, EINK_SPI_CS, EPD_DC, EPD_RST, EPD_BUSY);
-SDCardManager sdManager(EPD_SCLK, SD_SPI_MISO, EPD_MOSI, SD_SPI_CS, EINK_SPI_CS);
-// Battery ADC pin and global instance
-#define BAT_GPIO0 0
-BatteryMonitor g_battery(BAT_GPIO0);
-UIManager uiManager(einkDisplay, sdManager);
+EInkDisplay g_einkDisplay;
+SDCardManager g_sdManager;
+UIManager g_uiManager;
 SerialCLI serialCLI;
 
 // Button update task - runs continuously to keep button state fresh
@@ -60,8 +46,8 @@ void writeDebugLog() {
   char buf[64];
   int length = snprintf(buf, sizeof(buf), "wakeup: %d\npower_raw: %d\n", (int)w, digitalRead(POWER_BUTTON_PIN));
 
-  if (sdManager.ready()) {
-    if (!sdManager.writeFile("/log.txt", std::string_view(buf, length))) {
+  if (g_sdManager.ready()) {
+    if (!g_sdManager.writeFile("/log.txt", std::string_view(buf, length))) {
       Serial.println("Failed to write log.txt to SD");
     }
   } else {
@@ -112,11 +98,13 @@ void verifyWakeupLongPress() {
 void enterDeepSleep() {
   Serial.println("Power button long press detected. Entering deep sleep.");
 
+  Settings::save();
+
   // Let UI save any persistent state before we render the sleep screen
-  uiManager.prepareForSleep();
+  g_uiManager.prepareForSleep();
 
   // Show sleep screen
-  uiManager.showSleepScreen();
+  g_uiManager.showSleepScreen();
 
   // Enter deep sleep mode
   // this seems to start the display and leads to grayish screen somehow???
@@ -158,11 +146,12 @@ void setup() {
   Serial.println("Button update task started");
 
   // Initialize SD card manager
-  sdManager.begin();
+  g_sdManager.begin();
 
   // Ensure /microreader/ directory exists
-  if (sdManager.ready()) {
-    sdManager.ensureDirectoryExists("/microreader");
+  if (g_sdManager.ready()) {
+    g_sdManager.ensureDirectoryExists("/microreader");
+    Settings::load();
   }
 
   // Write debug log
@@ -170,10 +159,10 @@ void setup() {
 
   // Initialize display driver FIRST (allocate frame buffers before EPUB test to avoid fragmentation)
   Serial.printf("Free memory before display init: %d bytes\n", ESP.getFreeHeap());
-  einkDisplay.begin();
+  g_einkDisplay.begin();
 
   // Initialize display controller (handles application logic)
-  uiManager.begin();
+  g_uiManager.begin();
 
   Serial.println("Initialization complete!\n");
   
@@ -194,7 +183,7 @@ void loop() {
   serialCLI.update();
 
   // Button state is updated by background task
-  uiManager.handleButtons(buttons);
+  g_uiManager.handleButtons(buttons);
 
   // Check for power button press to enter sleep
   if (buttons.isPowerButtonDown()) {

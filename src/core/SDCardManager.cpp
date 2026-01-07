@@ -3,18 +3,24 @@
 #include <SD.h>
 #include <SPI.h>
 
-SDCardManager::SDCardManager(uint8_t epd_sclk, uint8_t sd_miso, uint8_t epd_mosi, uint8_t sd_cs, uint8_t eink_cs)
-    : epd_sclk(epd_sclk), sd_miso(sd_miso), epd_mosi(epd_mosi), sd_cs(sd_cs), eink_cs(eink_cs), initialized(false) {}
+#define EPD_DC 4     // Data/Command
+#define EPD_RST 5    // Reset
+#define EPD_BUSY 6   // Busy
+#define EPD_SCLK 8   // SPI Clock
+#define EPD_MOSI 10  // SPI MOSI (Master Out Slave In)
+
+#define SD_SPI_MISO 7
+#define SD_SPI_CS 12  // SD Card Chip Select
+
+SDCardManager::SDCardManager()
+    : initialized(false) {}
 
 bool SDCardManager::begin() {
-  pinMode(eink_cs, OUTPUT);
-  digitalWrite(eink_cs, HIGH);
+  pinMode(SD_SPI_CS, OUTPUT);
+  digitalWrite(SD_SPI_CS, HIGH);
 
-  pinMode(sd_cs, OUTPUT);
-  digitalWrite(sd_cs, HIGH);
-
-  SPI.begin(epd_sclk, sd_miso, epd_mosi, sd_cs);
-  if (!SD.begin(sd_cs, SPI, 40000000)) {
+  SPI.begin(EPD_SCLK, SD_SPI_MISO, EPD_MOSI, SD_SPI_CS);
+  if (!SD.begin(SD_SPI_CS, SPI, 40000000)) {
     Serial.print("\n SD card not detected\n");
     initialized = false;
   } else {

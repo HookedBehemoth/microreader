@@ -10,47 +10,45 @@
 #include "ui/screens/SettingsScreen.h"
 #include "ui/screens/TextViewerScreen.h"
 
-UIManager::UIManager(EInkDisplay& display, SDCardManager& sdManager)
-    : display(display), sdManager(sdManager), textRenderer(display) {
-  // Initialize consolidated settings manager
-  settings = new Settings(sdManager);
-  // Create concrete screens and store pointers in the map.
-  screens[ScreenId::FileBrowser] =
-      std::unique_ptr<Screen>(new FileBrowserScreen(display, textRenderer, sdManager, *this));
-  screens[ScreenId::ImageViewer] = std::unique_ptr<Screen>(new ImageViewerScreen(display, *this));
-  screens[ScreenId::PkPassViewer] =
-      std::unique_ptr<Screen>(new PkPassViewerScreen(display, sdManager, *this));
-  screens[ScreenId::TextViewer] =
-      std::unique_ptr<Screen>(new TextViewerScreen(display, textRenderer, sdManager, *this));
-  screens[ScreenId::Settings] = std::unique_ptr<Screen>(new SettingsScreen(display, textRenderer, *this));
-  Serial.printf("[%lu] UIManager: Constructor called\n", millis());
-}
+namespace {
+  FileBrowserScreen fileBrowser;
+  ImageViewerScreen imageViewer;
+  TextViewerScreen textViewer;
+  PkPassViewerScreen pkPassViewer;
+  SettingsScreen settingsScreen;
 
-UIManager::~UIManager() {
-  if (settings)
-    delete settings;
+  std::array<Screen*, static_cast<size_t>(UIManager::ScreenId::Count)> screens = {
+    &fileBrowser,
+    &imageViewer,
+    &textViewer,
+    &pkPassViewer,
+    &settingsScreen,
+  };
+
+  Screen* getScreen(UIManager::ScreenId id) {
+    size_t index = static_cast<size_t>(id);
+    if (index < screens.size()) {
+      return screens[index];
+    }
+    return nullptr;
+  }
 }
 
 void UIManager::begin() {
   Serial.printf("[%lu] UIManager: begin() called\n", millis());
-  // Load consolidated settings (import legacy files on first run)
-  if (sdManager.ready()) {
-    if (settings)
-      settings->load();
-  }
+
   // Initialize screens using generic Screen interface
   for (auto& p : screens) {
-    if (p.second)
-      p.second->begin();
+    p->begin();
   }
 
   // Restore last-visible screen (use consolidated settings when available)
   currentScreen = ScreenId::FileBrowser;
   ScreenId savedPreviousScreen = ScreenId::FileBrowser;
 
-  if (sdManager.ready() && settings) {
+  if (g_sdManager.ready()) {
     int saved = 0;
-    if (settings->getInt(IntSetting::UI_SCREEN, saved)) {
+    if (Settings::getInt(IntSetting::UI_SCREEN, saved)) {
       if (saved >= 0 && saved < static_cast<int>(ScreenId::Count)) {
         currentScreen = static_cast<ScreenId>(saved);
         Serial.printf("[%lu] UIManager: Restored screen %d from settings\n", millis(), saved);
@@ -63,8 +61,8 @@ void UIManager::begin() {
 
     // Restore previous screen (will apply after showScreen)
     int prevSaved = 0;
-    if (settings->getInt(IntSetting::UI_PREVIOUS_SCREEN, prevSaved)) {
-      if (prevSaved >= 0 && prevSaved <= static_cast<int>(ScreenId::Settings)) {
+    if (Settings::getInt(IntSetting::UI_PREVIOUS_SCREEN, prevSaved)) {
+      if (prevSaved >= 0 && prevSaved < static_cast<int>(ScreenId::Count)) {
         savedPreviousScreen = static_cast<ScreenId>(prevSaved);
         Serial.printf("[%lu] UIManager: Restored previous screen %d from settings\n", millis(), prevSaved);
       }
@@ -85,19 +83,20 @@ void UIManager::begin() {
 void UIManager::handleButtons(Buttons& buttons) {
   // Pass buttons to the current screen
   // Directly forward to the active screen (must exist)
-  screens[currentScreen]->handleButtons(buttons);
+  getScreen(currentScreen)->handleButtons(buttons);
 }
 
 void UIManager::showSleepScreen() {
   Serial.printf("[%lu] Showing SLEEP screen\n", millis());
-  display.clearScreen(0xFF);
+  g_einkDisplay.clearScreen(0xFF);
 
   // Draw bebop image centered
-  display.drawImage(bebop_image, 0, 0, BEBOP_IMAGE_WIDTH, BEBOP_IMAGE_HEIGHT, true);
+  g_einkDisplay.drawImage(bebop_image, 0, 0, BEBOP_IMAGE_WIDTH, BEBOP_IMAGE_HEIGHT, true);
 
   // Add "Sleeping..." text at the bottom
   {
-    textRenderer.setFrameBuffer(display.getFrameBuffer());
+    TextRenderer textRenderer;
+    textRenderer.setFrameBuffer(g_einkDisplay.getFrameBuffer());
     textRenderer.setBitmapType(TextRenderer::BITMAP_BW);
     textRenderer.setTextColor(TextRenderer::COLOR_BLACK);
     textRenderer.setFont(getMainFont());
@@ -113,23 +112,23 @@ void UIManager::showSleepScreen() {
   }
 
   // show the image with the grayscale antialiasing
-  display.displayBuffer(EInkDisplay::FULL_REFRESH);
-  display.copyGrayscaleBuffers(bebop_image_lsb, bebop_image_msb);
-  display.displayGrayBuffer(true);
+  g_einkDisplay.displayBuffer(EInkDisplay::FULL_REFRESH);
+  g_einkDisplay.copyGrayscaleBuffers(bebop_image_lsb, bebop_image_msb);
+  g_einkDisplay.displayGrayBuffer(true);
 }
 
 void UIManager::prepareForSleep() {
   // Notify the active screen that the device is powering down so it can
   // persist any state (e.g. current reading position).
-  if (screens[currentScreen])
-    screens[currentScreen]->shutdown();
+  if (getScreen(currentScreen))
+    getScreen(currentScreen)->shutdown();
   // Persist which screen was active so we can restore it on next boot.
-  if (sdManager.ready() && settings) {
+  if (g_sdManager.ready()) {
     Serial.printf("[%lu] UIManager: Saving current screen %d to settings\n", millis(),
                   static_cast<int>(currentScreen));
-    settings->setInt(IntSetting::UI_SCREEN, static_cast<int>(currentScreen));
-    settings->setInt(IntSetting::UI_PREVIOUS_SCREEN, static_cast<int>(previousScreen));
-    if (!settings->save()) {
+    Settings::setInt(IntSetting::UI_SCREEN, static_cast<int>(currentScreen));
+    Settings::setInt(IntSetting::UI_PREVIOUS_SCREEN, static_cast<int>(previousScreen));
+    if (!Settings::save()) {
       Serial.println("UIManager: Failed to write settings.cfg to SD");
     }
   } else {
@@ -140,12 +139,12 @@ void UIManager::prepareForSleep() {
 void UIManager::openTextFile(const String& sdPath) {
   Serial.printf("UIManager: openTextFile %s\n", sdPath.c_str());
   // Directly access TextViewerScreen and open the file (guaranteed to exist)
-  static_cast<TextViewerScreen*>(screens[ScreenId::TextViewer].get())->openFile(sdPath);
+  static_cast<TextViewerScreen*>(getScreen(ScreenId::TextViewer))->openFile(sdPath);
   showScreen(ScreenId::TextViewer);
 }
 
 void UIManager::openPkPassFile(const String& sdPath) {
-  static_cast<PkPassViewerScreen*>(screens[ScreenId::PkPassViewer].get())->openFile(sdPath);
+  static_cast<PkPassViewerScreen*>(getScreen(ScreenId::PkPassViewer))->openFile(sdPath);
   showScreen(ScreenId::PkPassViewer);
 }
 
@@ -156,6 +155,6 @@ void UIManager::showScreen(ScreenId id) {
   // Call activate so screens can perform any work needed when they become
   // active (this also ensures TextViewerScreen::activate is invoked to open
   // any pending file that was loaded during begin()).
-  screens[id]->activate();
-  screens[id]->show();
+  getScreen(id)->activate();
+  getScreen(id)->show();
 }
