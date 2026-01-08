@@ -39,6 +39,15 @@ message(STATUS "CORE_SOURCES_COUNT=${CORE_SOURCES}")
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/main.cpp$")
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/BatteryMonitor.cpp$")
 list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/Buttons.cpp$")
+# Exclude pkpass_parser.cpp which requires Arduino JSON
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/pkpass_parser.cpp$")
+# Exclude core files that use Arduino hardware
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/SerialCLI.cpp$")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/EInkDisplay.cpp$")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/SDCardManager.cpp$")
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/Settings.cpp$")
+# Exclude UI files that depend on hardware
+list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/ui/.*$")
 
 message(STATUS "CORE_SOURCES_AFTER_FILTER=${CORE_SOURCES}")
 
