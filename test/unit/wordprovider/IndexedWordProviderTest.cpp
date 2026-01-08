@@ -16,6 +16,14 @@ namespace IndexedWordProviderTests {
 
 constexpr int MAX_FAILURES_TO_REPORT = 10;
 
+// ESC sequence constants for style testing
+// Format: ESC + command byte (2 bytes total)
+constexpr char ESC_CHAR = '\x1B';
+constexpr char ESC_BOLD_ON[] = "\x1B" "B";
+constexpr char ESC_BOLD_OFF[] = "\x1B" "b";
+constexpr char ESC_ITALIC_ON[] = "\x1B" "I";
+constexpr char ESC_ITALIC_OFF[] = "\x1B" "i";
+
 // Helper to escape a string for output
 std::string escapeForOutput(const String& word) {
   std::string result;
@@ -27,7 +35,7 @@ std::string escapeForOutput(const String& word) {
       result += "\\r";
     else if (c == '\t')
       result += "\\t";
-    else if (c == '\x1B')
+    else if (c == ESC_CHAR)
       result += "\\e";
     else
       result += c;
@@ -200,9 +208,8 @@ void testPositionOperations(TestUtils::TestRunner& runner) {
 void testStyleDetection(TestUtils::TestRunner& runner) {
   std::cout << "\n=== Test: Style Detection ===\n";
 
-  // Create content with ESC style tokens
-  // ESC + 'B' = bold on, ESC + 'b' = bold off
-  String content = "Normal \x1B" "B" "Bold" "\x1B" "b" " normal";
+  // Create content with ESC style tokens using named constants
+  String content = String("Normal ") + ESC_BOLD_ON + "Bold" + ESC_BOLD_OFF + " normal";
   IndexedWordProvider provider(content);
 
   std::vector<std::pair<std::string, FontStyle>> words;

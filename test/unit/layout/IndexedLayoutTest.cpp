@@ -18,6 +18,10 @@
 
 namespace IndexedLayoutTests {
 
+// ESC sequence constants for style testing
+constexpr char ESC_BOLD_ON[] = "\x1B" "B";
+constexpr char ESC_BOLD_OFF[] = "\x1B" "b";
+
 /**
  * Test: Basic indexed layout
  */
@@ -117,8 +121,8 @@ void testWordIndicesPreserved(TestUtils::TestRunner& runner) {
 void testIndexedLayoutStyles(TestUtils::TestRunner& runner) {
   std::cout << "\n=== Test: Indexed Layout Styles ===\n";
 
-  // Content with bold text
-  String content = "Normal \x1B" "B" "Bold" "\x1B" "b" " normal";
+  // Content with bold text using named constants
+  String content = String("Normal ") + ESC_BOLD_ON + "Bold" + ESC_BOLD_OFF + " normal";
   IndexedWordProvider provider(content);
 
   TextRenderer renderer;

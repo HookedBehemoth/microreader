@@ -82,8 +82,14 @@ IndexedWordProvider::IndexedWordProvider(const String& content) {
     std::memcpy(buffer_, content.c_str(), bufferSize_);
     buffer_[bufferSize_] = '\0';
   }
-  skipUtf8Bom();
-  indexWords();
+  try {
+    skipUtf8Bom();
+    indexWords();
+  } catch (...) {
+    delete[] buffer_;
+    buffer_ = nullptr;
+    throw;
+  }
 }
 
 IndexedWordProvider::IndexedWordProvider(const char* data, size_t length) {
@@ -93,8 +99,14 @@ IndexedWordProvider::IndexedWordProvider(const char* data, size_t length) {
     std::memcpy(buffer_, data, bufferSize_);
     buffer_[bufferSize_] = '\0';
   }
-  skipUtf8Bom();
-  indexWords();
+  try {
+    skipUtf8Bom();
+    indexWords();
+  } catch (...) {
+    delete[] buffer_;
+    buffer_ = nullptr;
+    throw;
+  }
 }
 
 IndexedWordProvider::~IndexedWordProvider() {
@@ -396,6 +408,9 @@ FontStyle IndexedWordProvider::getStyleForWord(size_t wordIndex) const {
 
 size_t IndexedWordProvider::findWordIndexForOffset(uint32_t offset) const {
   if (wordIndices_.empty()) return SIZE_MAX;
+
+  // If offset is before first word, return first word index (0)
+  if (offset < wordIndices_[0].start) return 0;
 
   // Binary search for the word containing this offset
   size_t left = 0;

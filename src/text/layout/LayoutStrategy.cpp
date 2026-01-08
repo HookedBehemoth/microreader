@@ -1,6 +1,7 @@
 #include "LayoutStrategy.h"
 
 #include "../../content/css/CssStyle.h"
+#include "../../content/providers/IndexedWordProvider.h"
 #include "../../content/providers/WordProvider.h"
 #include "../../rendering/TextRenderer.h"
 #include "../hyphenation/GermanHyphenation.h"
@@ -377,9 +378,6 @@ int LayoutStrategy::test_getPreviousPageStart(WordProvider& provider, TextRender
                                               const LayoutConfig& config, int currentStartPosition) {
   return getPreviousPageStart(provider, renderer, config, currentStartPosition);
 }
-
-// Include IndexedWordProvider for indexed layout implementation
-#include "../../content/providers/IndexedWordProvider.h"
 
 IndexedPageLayout LayoutStrategy::layoutTextIndexed(IndexedWordProvider& provider, TextRenderer& renderer,
                                                     const LayoutConfig& config) {
