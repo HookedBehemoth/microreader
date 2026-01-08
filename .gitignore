@@ -1,0 +1,15 @@
+*.zip
+*.epub
+*.opf
+*.css
+*.ncx
+*.xhtml
+*.html
+*.xml
+mimetype
+*.jpeg
+*.jpg
+*.png
+parser
+*.json
+.vscode
