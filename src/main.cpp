@@ -32,7 +32,9 @@ UIManager g_uiManager;
 SerialCLI serialCLI;
 
 // Button update task - runs continuously to keep button state fresh
-void buttonUpdateTask(void* parameter) {
+static StackType_t buttonUpdateTaskStack[1024];
+static StaticTask_t buttonUpdateTaskBuffer;
+static void buttonUpdateTask(void* parameter) {
   Buttons* btns = static_cast<Buttons*>(parameter);
   while (true) {
     btns->update();
@@ -142,7 +144,7 @@ void setup() {
   Serial.println("Buttons initialized");
 
   // Start button update task
-  xTaskCreate(buttonUpdateTask, "btnUpdate", 2048, &buttons, 1, nullptr);
+  xTaskCreateStatic(buttonUpdateTask, "btnUpdate", sizeof(buttonUpdateTaskStack), &buttons, 1, buttonUpdateTaskStack, &buttonUpdateTaskBuffer);
   Serial.println("Button update task started");
 
   // Initialize SD card manager
