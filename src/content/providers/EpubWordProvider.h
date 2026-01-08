@@ -73,6 +73,14 @@ class EpubWordProvider : public WordProvider {
     return useStreamingConversion_;
   }
 
+  bool hasToc() const {
+    return epubReader_ && epubReader_->getTocCount() > 0;
+  }
+
+  EpubReader* getEpubReader() const {
+    return epubReader_;
+  }
+
  private:
   struct ConversionTimings {
     unsigned long startStream = 0;

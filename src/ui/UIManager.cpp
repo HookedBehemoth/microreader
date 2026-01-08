@@ -8,12 +8,14 @@
 #include "ui/screens/ImageViewerScreen.h"
 #include "ui/screens/PkPassViewerScreen.h"
 #include "ui/screens/SettingsScreen.h"
+#include "ui/screens/TocBrowserScreen.h"
 #include "ui/screens/TextViewerScreen.h"
 
 namespace {
   FileBrowserScreen fileBrowser;
   ImageViewerScreen imageViewer;
   TextViewerScreen textViewer;
+  TocBrowserScreen tocBrowser;
   PkPassViewerScreen pkPassViewer;
   SettingsScreen settingsScreen;
 
@@ -21,6 +23,7 @@ namespace {
     &fileBrowser,
     &imageViewer,
     &textViewer,
+    &tocBrowser,
     &pkPassViewer,
     &settingsScreen,
   };
@@ -157,4 +160,8 @@ void UIManager::showScreen(ScreenId id) {
   // any pending file that was loaded during begin()).
   getScreen(id)->activate();
   getScreen(id)->show();
+}
+
+Screen* UIManager::getScreen(ScreenId id) {
+  return ::getScreen(id);
 }

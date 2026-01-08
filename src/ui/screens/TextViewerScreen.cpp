@@ -17,6 +17,7 @@
 #include "../../text/layout/GreedyLayoutStrategy.h"
 #include "../../text/layout/KnuthPlassLayoutStrategy.h"
 #include "SettingsScreen.h"
+#include "TocBrowserScreen.h"
 
 TextViewerScreen::TextViewerScreen()
     : layoutStrategy(new KnuthPlassLayoutStrategy())
@@ -127,8 +128,13 @@ void TextViewerScreen::handleButtons(Buttons& buttons) {
     savePositionToFile();
     saveSettingsToFile();
     g_uiManager.showScreen(UIManager::ScreenId::FileBrowser);
-  } else if (buttons.isPressed(Buttons::CONFIRM)) {
-    // Open settings
+  } else if (hasToc && buttons.isDown(Buttons::CONFIRM) && buttons.getHoldDuration(Buttons::CONFIRM) >= LONG_PRESS_MS) {
+    auto ep = static_cast<EpubWordProvider*>(provider);
+    auto tocBrowser = (TocBrowserScreen*)g_uiManager.getScreen(UIManager::ScreenId::TocBrowser);
+    tocBrowser->setToc(ep, ep->getEpubReader(), ep->getCurrentChapter());
+    g_uiManager.showScreen(UIManager::ScreenId::TocBrowser);
+  } else if (buttons.wasReleased(Buttons::CONFIRM)) {
+    // Short press - open settings
     g_uiManager.showScreen(UIManager::ScreenId::Settings);
   } else if (buttons.isDown(Buttons::LEFT) || buttons.isDown(Buttons::VOLUME_UP)) {
     uint8_t btn = buttons.isDown(Buttons::LEFT) ? Buttons::LEFT : Buttons::VOLUME_UP;
@@ -450,6 +456,7 @@ void TextViewerScreen::openFile(const String& sdPath) {
 
   // Use a buffered file-backed provider to avoid allocating the entire file in RAM.
   delete provider;
+  hasToc = false;
   provider = nullptr;
   currentFilePath = sdPath;
 
@@ -475,6 +482,9 @@ void TextViewerScreen::openFile(const String& sdPath) {
       currentFilePath = String("");
       showErrorMessage("Failed to open EPUB");
       return;
+    }
+    if (ep->hasToc()) {
+      hasToc = true;
     }
     provider = ep;
 

@@ -1169,3 +1169,29 @@ bool EpubReader::parseCssFiles() {
 
   return successCount > 0;
 }
+
+int EpubReader::spineIndexToTocIndex(int spineIndex) const {
+  const SpineItem* spineItem = getSpineItem(spineIndex);
+  auto begin = toc_.begin();
+  auto end = toc_.end();
+  auto it = std::find_if(begin, end, [&spineItem](const TocItem& t) {
+    return t.href == spineItem->href;
+  });
+  if (it == end) {
+    return 0;  // Not found
+  }
+  return it - begin;
+}
+
+int EpubReader::tocIndexToSpineIndex(int tocIndex) const {
+  const TocItem* tocItem = getTocItem(tocIndex);
+  auto begin = getSpineItem(0);
+  auto end = begin + getSpineCount();
+  auto it = std::find_if(begin, end, [&tocItem, this](const SpineItem& s) {
+    return s.href == tocItem->href;
+  });
+  if (it == end) {
+    return 0;  // Not found
+  }
+  return it - begin;
+}

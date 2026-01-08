@@ -12,7 +12,7 @@
 class UIManager {
  public:
   // Typed screen identifiers so callers don't use raw indices
-  enum class ScreenId { FileBrowser, ImageViewer, TextViewer, PkPassViewer, Settings, Count };
+  enum class ScreenId { FileBrowser, ImageViewer, TextViewer, TocBrowser, PkPassViewer, Settings, Count };
 
   void begin();
   void handleButtons(Buttons& buttons);
@@ -36,6 +36,8 @@ class UIManager {
   ScreenId getPreviousScreen() const {
     return previousScreen;
   }
+
+  Screen* getScreen(ScreenId id);
 };
 
 extern UIManager g_uiManager;

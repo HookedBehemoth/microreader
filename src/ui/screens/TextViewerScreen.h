@@ -55,6 +55,7 @@ class TextViewerScreen : public Screen {
   String pendingOpenPath;
   // Whether to show chapter numbers in the page indicator
   bool showChapterNumbers = true;
+  bool hasToc = false;
 
   // Persist/load current reading position for `currentFilePath`
   void savePositionToFile();

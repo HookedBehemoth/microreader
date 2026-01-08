@@ -64,6 +64,8 @@ class EpubReader {
     }
     return nullptr;
   }
+  int spineIndexToTocIndex(int spineIndex) const;
+  int tocIndexToSpineIndex(int tocIndex) const;
 
   /**
    * Get a file from the EPUB - either from cache or extract it first
