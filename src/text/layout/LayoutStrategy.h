@@ -7,11 +7,13 @@
 #include <cstdint>
 #include <vector>
 
+#include "IndexedLayout.h"              // For IndexedPageLayout
 #include "rendering/SimpleFont.h"  // For FontStyle
 
 // Forward declarations
 class TextRenderer;
 class WordProvider;
+class IndexedWordProvider;
 class HyphenationStrategy;
 enum class Language;
 
@@ -107,6 +109,15 @@ class LayoutStrategy {
   int test_getPreviousPageStart(WordProvider& provider, TextRenderer& renderer, const LayoutConfig& config,
                                 int currentStartPosition);
   Line test_getNextLineDefault(WordProvider& provider, TextRenderer& renderer, int16_t maxWidth, bool& isParagraphEnd);
+
+  // Indexed layout methods - work with IndexedWordProvider for memory efficiency
+  // These methods use word indices instead of copying word strings
+  virtual IndexedPageLayout layoutTextIndexed(IndexedWordProvider& provider, TextRenderer& renderer,
+                                              const LayoutConfig& config);
+
+  // Render an indexed page layout - retrieves words from provider as needed
+  virtual void renderPageIndexed(const IndexedPageLayout& layout, IndexedWordProvider& provider,
+                                 TextRenderer& renderer, const LayoutConfig& config);
 
  protected:
   struct HyphenSplit {

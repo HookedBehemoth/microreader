@@ -377,3 +377,130 @@ int LayoutStrategy::test_getPreviousPageStart(WordProvider& provider, TextRender
                                               const LayoutConfig& config, int currentStartPosition) {
   return getPreviousPageStart(provider, renderer, config, currentStartPosition);
 }
+
+// Include IndexedWordProvider for indexed layout implementation
+#include "../../content/providers/IndexedWordProvider.h"
+
+IndexedPageLayout LayoutStrategy::layoutTextIndexed(IndexedWordProvider& provider, TextRenderer& renderer,
+                                                    const LayoutConfig& config) {
+  const int16_t maxWidth = config.pageWidth - config.marginLeft - config.marginRight;
+  const int16_t x = config.marginLeft;
+  int16_t y = config.marginTop;
+  const int16_t maxY = config.pageHeight - config.marginBottom;
+
+  // Measure space width using renderer
+  renderer.setFontStyle(FontStyle::REGULAR);
+  renderer.getTextBounds(" ", 0, 0, nullptr, nullptr, &spaceWidth_, nullptr);
+
+  IndexedPageLayout result;
+  result.startPosition = provider.getCurrentIndex();
+  size_t startWordIndex = provider.getCurrentWordIndex();
+
+  while (y < maxY && provider.hasNextWord()) {
+    IndexedLine line;
+    int16_t currentWidth = 0;
+    bool isParagraphEnd = false;
+
+    // Determine alignment from provider
+    TextAlign pAlign = provider.getParagraphAlignment();
+    switch (pAlign) {
+      case TextAlign::Center:
+        line.alignment = TextAlign::Center;
+        break;
+      case TextAlign::Right:
+        line.alignment = TextAlign::Right;
+        break;
+      case TextAlign::Left:
+        line.alignment = TextAlign::Left;
+        break;
+      case TextAlign::Justify:
+        line.alignment = TextAlign::Justify;
+        break;
+      default:
+        line.alignment = TextAlign::Left;
+        break;
+    }
+
+    while (provider.hasNextWord()) {
+      size_t wordIndex = provider.getCurrentWordIndex();
+      StyledWord styledWord = provider.getNextWord();
+      String text = styledWord.text;
+
+      // Check for paragraph break
+      if (text == String("\n")) {
+        isParagraphEnd = true;
+        break;
+      }
+
+      // Measure word width
+      int16_t bx = 0, by = 0;
+      uint16_t bw = 0, bh = 0;
+      renderer.setFontStyle(styledWord.style);
+      renderer.getTextBounds(text.c_str(), 0, 0, &bx, &by, &bw, &bh);
+
+      int16_t wordWidth = static_cast<int16_t>(bw);
+      int16_t spaceNeeded = wordWidth;
+
+      if (currentWidth + spaceNeeded > maxWidth && currentWidth > 0) {
+        // Word doesn't fit, put it back for next line
+        provider.ungetWord();
+        break;
+      }
+
+      // Add word to line using indexed representation
+      IndexedWord indexedWord;
+      indexedWord.wordIndex = static_cast<uint32_t>(wordIndex);
+      indexedWord.width = wordWidth;
+      indexedWord.x = 0;  // Will be calculated during rendering
+      indexedWord.y = y;
+      indexedWord.wasSplit = false;
+      indexedWord.style = styledWord.style;
+
+      line.words.push_back(indexedWord);
+      currentWidth += spaceNeeded;
+    }
+
+    // Calculate x positions for words in this line
+    if (!line.words.empty()) {
+      int16_t lineWidth = 0;
+      for (const auto& w : line.words) {
+        lineWidth += w.width;
+      }
+
+      int16_t xPos = x;
+      if (line.alignment == TextAlign::Center) {
+        xPos = x + (maxWidth - lineWidth) / 2;
+      } else if (line.alignment == TextAlign::Right) {
+        xPos = x + maxWidth - lineWidth;
+      }
+
+      for (auto& w : line.words) {
+        w.x = xPos;
+        xPos += w.width;
+      }
+    }
+
+    result.lines.push_back(line);
+    y += config.lineHeight;
+  }
+
+  result.endPosition = provider.getCurrentIndex();
+
+  // Reset provider to start position
+  provider.setPosition(result.startPosition);
+
+  return result;
+}
+
+void LayoutStrategy::renderPageIndexed(const IndexedPageLayout& layout, IndexedWordProvider& provider,
+                                       TextRenderer& renderer, const LayoutConfig& config) {
+  for (const auto& line : layout.lines) {
+    for (const auto& word : line.words) {
+      // Get word text from provider using index
+      String text = provider.getWordAt(word.wordIndex);
+      renderer.setFontStyle(word.style);
+      renderer.setCursor(word.x, word.y);
+      renderer.print(text);
+    }
+  }
+}

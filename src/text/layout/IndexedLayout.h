@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "../content/css/CssStyle.h"
+#include "content/css/CssStyle.h"
 #include "rendering/SimpleFont.h"
 
 /**
