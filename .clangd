@@ -1,0 +1,7 @@
+CompileFlags:
+  Add: [-Wall, -Wextra, -Werror, -std=c++26, -fno-exceptions, -fno-rtti]
+  Remove: []
+
+Diagnostics:
+  ClangTidy:
+    Add: [performance-*]

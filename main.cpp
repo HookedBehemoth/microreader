@@ -2,10 +2,9 @@
 #include <cstdio>
 #include <initializer_list>
 
-#include "slice.h"
+#include "stringview.h"
 #include "stopwatch.h"
 #include "XmlParser.h"
-#include "XmlParser.cpp"
 
 // #include <
 using namespace xml;
@@ -204,13 +203,7 @@ void parseToc(
           currentTocSrc = "";
           currentTocText = "";
         } else if (navDepth == NavDepth::NavPoint && name == "content") {
-          auto attr = parser.attributes();
-          while (attr.next()) {
-            if (attr.name() == "src") {
-              currentTocSrc = attr.value().sliceUntil('#');
-              break;
-            }
-          }
+          currentTocSrc = parser.getAttribute("src");
           navDepth = NavDepth::Content;
         } else if (navDepth == NavDepth::NavPoint && name == "navPoint") {
           navDepth = NavDepth::NavPoint;

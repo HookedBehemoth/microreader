@@ -13,3 +13,4 @@ mimetype
 parser
 *.json
 .vscode
+*test

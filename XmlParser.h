@@ -1,6 +1,6 @@
 #pragma once
 
-#include "slice.h"
+#include "stringview.h"
 
 namespace xml {
 
@@ -12,7 +12,7 @@ class AttributeReader {
       : data(data_) {}
   StringView data;
   
-  constexpr bool next();
+  bool next();
   constexpr StringView name() const { return currentName; }
   constexpr StringView value() const { return currentValue; }
 
@@ -45,13 +45,23 @@ class XmlParser {
     EndOfFile
   };
 
-  constexpr NodeType next();
-  constexpr StringView name() const;
-  constexpr AttributeReader attributes() const;
-  constexpr StringView text() const;
-  constexpr StringView comment() const;
-  constexpr StringView processingInstruction() const;
-  constexpr StringView cdata() const;
+  NodeType next();
+  StringView name() const;
+  AttributeReader attributes() const;
+  StringView text() const;
+  StringView comment() const;
+  StringView processingInstruction() const;
+  StringView cdata() const;
+
+  constexpr StringView getAttribute(StringView attrName) const {
+    auto attr = attributes();
+    while (attr.next()) {
+      if (caseInsensitiveEquals(attr.name(), attrName)) {
+        return attr.value().sliceUntil('#');
+      }
+    }
+    return "";
+  }
 
 private:
   StringView data;

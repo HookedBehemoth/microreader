@@ -4,7 +4,7 @@ namespace xml {
 
 constexpr StringView WhiteSpaceChars = " \t\r\n";
 
-constexpr bool AttributeReader::next()
+bool AttributeReader::next()
 {
   // Skip whitespace
   auto it = data.skipAll(WhiteSpaceChars);
@@ -41,32 +41,7 @@ constexpr bool AttributeReader::next()
   return true;
 }
 
-constexpr bool TestAttributeReader()
-{
-  AttributeReader reader(" key1  =\t\r\n\"value1\" key2='value2' key3= \"value3\"/>");
-
-  bool result = true;
-
-  result = result && reader.next();
-  result = result && (reader.name() == "key1");
-  result = result && (reader.value() == "value1");
-
-  result = result && reader.next();
-  result = result && (reader.name() == "key2");
-  result = result && (reader.value() == "value2");
-
-  result = result && reader.next();
-  result = result && (reader.name() == "key3");
-  result = result && (reader.value() == "value3");
-
-  result = result && !reader.next();
-
-  return result;
-}
-
-static_assert(TestAttributeReader(), "AttributeReader test failed");
-
-constexpr XmlParser::NodeType XmlParser::next()
+XmlParser::NodeType XmlParser::next()
 {
   auto it = data.skip(position).skipAll(WhiteSpaceChars);
 
@@ -100,8 +75,7 @@ constexpr XmlParser::NodeType XmlParser::next()
     }
     auto elmEndPos = it.find('>');
     // Switch states while not actually touching position
-    if (it[elmEndPos - 1] == '/') {
-      it = it.skip(elmEndPos - 1);
+    if (elmEndPos > 0 && it[elmEndPos - 1] == '/') {
       return currentNode = NodeType::EndElement;
     }
 
@@ -155,7 +129,7 @@ constexpr XmlParser::NodeType XmlParser::next()
   return NodeType::EndOfFile;
 }
 
-constexpr StringView XmlParser::name() const
+StringView XmlParser::name() const
 {
   if (currentNode != NodeType::Element &&
       currentNode != NodeType::EndElement)
@@ -169,13 +143,13 @@ constexpr StringView XmlParser::name() const
   return it[0, nameLength];
 }
 
-constexpr AttributeReader XmlParser::attributes() const
+AttributeReader XmlParser::attributes() const
 {
   auto it = data.skip(position + name().size());
   return AttributeReader(it);
 }
 
-constexpr StringView XmlParser::text() const
+StringView XmlParser::text() const
 {
   if (currentNode != NodeType::Text)
   {
@@ -187,7 +161,7 @@ constexpr StringView XmlParser::text() const
   return it[0, textLength].trimEnd(WhiteSpaceChars);
 }
 
-constexpr StringView XmlParser::comment() const
+StringView XmlParser::comment() const
 {
   if (currentNode != NodeType::Comment)
   {
@@ -200,7 +174,7 @@ constexpr StringView XmlParser::comment() const
   return it[0, commentLength].trimEnd(WhiteSpaceChars);
 }
 
-constexpr StringView XmlParser::processingInstruction() const
+StringView XmlParser::processingInstruction() const
 {
   if (currentNode != NodeType::ProcessingInstruction)
   {
@@ -212,7 +186,7 @@ constexpr StringView XmlParser::processingInstruction() const
   return it[0, piLength].trimEnd(WhiteSpaceChars);
 }
 
-constexpr StringView XmlParser::cdata() const
+StringView XmlParser::cdata() const
 {
   if (currentNode != NodeType::CDATA)
   {
@@ -223,55 +197,5 @@ constexpr StringView XmlParser::cdata() const
   auto cdataLength = it.find("]]>");
   return it[0, cdataLength].trimEnd(WhiteSpaceChars);
 }
-
-constexpr bool TestXmlParser()
-{
-  constexpr StringView xmlData = R"xml(
-<root attr1="value1" attr2='value2'>
-  <!-- This is a comment -->
-  <child>Some <nested> text </nested> content</child>
-  <![CDATA[<notatag>]]>
-  <?pi processing instruction?>
-</root>)xml";
-
-  XmlParser parser { xmlData };
-  bool result = true;
-  result = result && (parser.next() == XmlParser::NodeType::Element);
-  result = result && (parser.name() == "root");
-  auto attrs = parser.attributes();
-  result = result && attrs.next();
-  result = result && (attrs.name() == "attr1");
-  result = result && (attrs.value() == "value1");
-  result = result && attrs.next();
-  result = result && (attrs.name() == "attr2");
-  result = result && (attrs.value() == "value2");
-  result = result && !attrs.next();
-  result = result && (parser.next() == XmlParser::NodeType::Comment);
-  result = result && (parser.comment() == "This is a comment");
-  result = result && (parser.next() == XmlParser::NodeType::Element);
-  result = result && (parser.name() == "child");
-  result = result && (parser.next() == XmlParser::NodeType::Text);
-  result = result && (parser.text() == "Some");
-  result = result && (parser.next() == XmlParser::NodeType::Element);
-  result = result && (parser.name() == "nested");
-  result = result && (parser.next() == XmlParser::NodeType::Text);
-  result = result && (parser.text() == "text");
-  result = result && (parser.next() == XmlParser::NodeType::EndElement);
-  result = result && (parser.name() == "nested");
-  result = result && (parser.next() == XmlParser::NodeType::Text);
-  result = result && (parser.text() == "content");
-  result = result && (parser.next() == XmlParser::NodeType::EndElement);
-  result = result && (parser.name() == "child");
-  result = result && (parser.next() == XmlParser::NodeType::CDATA);
-  result = result && (parser.cdata() == "<notatag>");
-  result = result && (parser.next() == XmlParser::NodeType::ProcessingInstruction);
-  result = result && (parser.processingInstruction() == "pi processing instruction");
-  result = result && (parser.next() == XmlParser::NodeType::EndElement);
-  result = result && (parser.name() == "root");
-  result = result && (parser.next() == XmlParser::NodeType::EndOfFile);
-  return result;
-}
-
-static_assert(TestXmlParser(), "XmlParser test failed");
 
 }
