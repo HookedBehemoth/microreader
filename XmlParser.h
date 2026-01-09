@@ -50,7 +50,7 @@ class XmlParser {
   constexpr AttributeReader attributes() const;
   constexpr StringView text() const;
   constexpr StringView comment() const;
-  constexpr StringView processingInstruction() const; // TODO: is this really needed
+  constexpr StringView processingInstruction() const;
   constexpr StringView cdata() const;
 
 private:
