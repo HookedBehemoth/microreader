@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include "miniz.h"
 #include "stringview.h"
+#include "log.h"
 
 namespace {
   constexpr size_t BufferSize = 200 * 1024;
@@ -60,6 +61,11 @@ namespace {
     return (T*)aligned;
   }
 
+  // fill unused memory with zeros for sanity checking
+  void sanityCheck() {
+    std::memset(g_buffer + g_bumpFront, 0x00, availableMemory());
+  }
+
   class FrontBumpScope {
     public:
     FrontBumpScope() : m_oldBumpFront(g_bumpFront) {}
@@ -91,7 +97,10 @@ namespace {
 
   std::optional<FILE*> g_epubFile;
   std::optional<std::span<ZipFileEntry>> g_zipEntries;
-  std::optional<Book::Book> g_book;
+  std::optional<StringView> g_title;
+  std::optional<StringView> g_author;
+  std::optional<StringView> g_language;
+  std::optional<StringView> g_coverId;
   std::optional<StringView> g_contentPath;
   std::optional<StringView> g_tocPath;
   std::optional<std::span<Book::SpineEntry>> g_spine;
@@ -216,6 +225,11 @@ EpubLoadResult loadEpub(StringView filePath) {
     std::optional<StringView> tocPath;
     bool inSpine = false;
     size_t spineEntryCount = 0;
+    bool inMetadata = false;
+    std::optional<StringView> title;
+    std::optional<StringView> author;
+    std::optional<StringView> language;
+    std::optional<StringView> coverId;
 
     while (true) {
       auto ty = parser.next();
@@ -223,6 +237,10 @@ EpubLoadResult loadEpub(StringView filePath) {
         break;
 
       if (ty == xml::XmlParser::NodeType::Element) {
+        if (parser.name().caseCmp("metadata")) {
+          inMetadata = true;
+          continue;
+        }
         if (parser.name().caseCmp("manifest")) {
           manifest = parser;
           inManifest = true;
@@ -233,6 +251,21 @@ EpubLoadResult loadEpub(StringView filePath) {
           inSpine = true;
           tocPath = parser.getAttribute("toc");
           continue;
+        }
+
+        if (inMetadata) {
+          if (parser.name().caseCmp("dc:title")) {
+            title = parser.text();
+          } else if (parser.name().caseCmp("dc:creator")) {
+            author = parser.text();
+          } else if (parser.name().caseCmp("dc:language")) {
+            language = parser.text();
+          } else if (parser.name().caseCmp("meta")) {
+            auto nameAttr = parser.getAttribute("name");
+            if (nameAttr.caseCmp("cover")) {
+              coverId = parser.getAttribute("content");
+            }
+          }
         }
 
         if (parser.name().caseCmp("item") && inManifest) {
@@ -256,8 +289,16 @@ EpubLoadResult loadEpub(StringView filePath) {
         if (parser.name().caseCmp("manifest")) {
           inManifest = false;
         }
+        if (parser.name().caseCmp("metadata")) {
+          inMetadata = false;
+        }
       }
     }
+
+    if (title.has_value()) g_title = retain(*title);
+    if (author.has_value()) g_author = retain(*author);
+    if (language.has_value()) g_language = retain(*language);
+    if (coverId.has_value()) g_coverId = retain(*coverId);
 
     if (manifestEntryCount == 0) {
       printf("No manifest entries found in content file\n");
@@ -269,7 +310,8 @@ EpubLoadResult loadEpub(StringView filePath) {
       return EpubLoadResult::InvalidFormat;
     }
 
-    // parser.reset();
+    printf("Expecting %zu manifest entries\n", manifestEntryCount);
+    printf("Expecting %zu spine entries\n", spineEntryCount);
 
     // temporary allocation
     struct ManifestEntry {
@@ -278,8 +320,7 @@ EpubLoadResult loadEpub(StringView filePath) {
     };
     ManifestEntry* manifestEntries = bumpAlloc<ManifestEntry>(manifestEntryCount);
   
-    size_t i = 0;
-
+    ManifestEntry* manifestIt = manifestEntries;
     while (true) {
       auto ty = manifest->next();
       if (ty == xml::XmlParser::NodeType::EndOfFile)
@@ -288,7 +329,7 @@ EpubLoadResult loadEpub(StringView filePath) {
         if (!manifest->name().caseCmp("item"))
           continue;
         
-        auto &entry = manifestEntries[i++];
+        auto &entry = *manifestIt++;
         
         entry.id = manifest->getAttribute("id");
 
@@ -303,10 +344,6 @@ EpubLoadResult loadEpub(StringView filePath) {
         }
 
         entry.href = fileEntry->fileName;
-
-        if (i >= manifestEntryCount) {
-          break;
-        }
       } else if (ty == xml::XmlParser::NodeType::EndElement) {
         if (manifest->name().caseCmp("manifest")) {
           break;
@@ -339,7 +376,14 @@ EpubLoadResult loadEpub(StringView filePath) {
 
     // permanent spine allocation
     SpineEntry* spineEntries = subAlloc<SpineEntry>(spineEntryCount);
+    if (!spineEntries) {
+      printf("Out of memory allocating spine entries\n");
+      return EpubLoadResult::OutOfMemory;
+    }
 
+    g_spine = std::span<SpineEntry>(spineEntries, spineEntryCount);
+
+    SpineEntry* spineIt = spineEntries;
     while (true) {
       auto ty = spine->next();
       if (ty == xml::XmlParser::NodeType::EndOfFile)
@@ -348,7 +392,7 @@ EpubLoadResult loadEpub(StringView filePath) {
         if (!spine->name().caseCmp("itemref"))
           continue;
         
-        auto &entry = spineEntries[i++];
+        auto &entry = *spineIt++;
         
         auto idref = spine->getAttribute("idref");
         entry.idref = idref;
@@ -361,18 +405,17 @@ EpubLoadResult loadEpub(StringView filePath) {
           return EpubLoadResult::InvalidFormat;
         }
         entry.src = *hrefOpt;
-
-        if (i >= spineEntryCount) {
-          break;
-        }
+        printf("Spine entry: ");
+        fwrite(entry.idref.data(), 1, entry.idref.size(), stdout);
+        printf(" -> ");
+        fwrite(entry.src.data(), 1, entry.src.size(), stdout);
+        printf("\n");
       } else if (ty == xml::XmlParser::NodeType::EndElement) {
         if (spine->name().caseCmp("spine")) {
           break;
         }
       }
     }
-
-    g_spine = std::span<SpineEntry>(spineEntries, spineEntryCount);
   }
 
   if (g_tocPath.has_value()) {
@@ -385,22 +428,52 @@ EpubLoadResult loadEpub(StringView filePath) {
     StringView tocView = StringView { (char*)tocFile->data(), tocFile->size() };
 
     result = parseTableOfContents(tocView);
+    if (result != EpubLoadResult::Success) {
+      return result;
+    }
+
+    printf("Table of Contents loaded, %zu entries\n", g_toc->size());
+    for (const auto &entry : *g_toc) {
+      printf("TOC Entry: ");
+      fwrite(entry.label.data(), 1, entry.label.size(), stdout);
+      printf(" -> ");
+      fwrite(entry.src.data(), 1, entry.src.size(), stdout);
+      printf("\n");
+    }
+
+    // Assign ToC entries to Spine entries
+    std::optional<TocEntry*> currentTocEntry;
+    size_t tocIndex = 0;
+    for (auto& spineEntry : *g_spine) {
+      std::optional<TocEntry*> matchedTocEntry;
+      for (size_t i = tocIndex; i < g_toc->size(); i++) {
+        auto& tocEntry = (*g_toc)[i];
+        if (tocEntry.src == spineEntry.src) {
+          matchedTocEntry = &tocEntry;
+          tocIndex = i + 1;
+          break;
+        }
+      }
+      if (matchedTocEntry != std::nullopt) {
+        currentTocEntry = matchedTocEntry;
+      }
+      spineEntry.tocEntry = currentTocEntry;
+    }
+
+    for (const auto& spineEntry : *g_spine) {
+      printf("Spine Entry: ");
+      fwrite(spineEntry.src.data(), 1, spineEntry.src.size(), stdout);
+      if (spineEntry.tocEntry.has_value()) {
+        printf(" -> TOC: ");
+        fwrite((*spineEntry.tocEntry)->label.data(), 1, (*spineEntry.tocEntry)->label.size(), stdout);
+      } else {
+        printf(" -> TOC: (none)");
+      }
+      printf("\n");
+    }
   }
 
-  if (result != EpubLoadResult::Success) {
-    return result;
-  }
-  printf("Table of Contents loaded, %zu entries\n", g_toc->size());
-  for (const auto &entry : *g_toc) {
-    printf("TOC Entry: ");
-    fwrite(entry.label.data(), 1, entry.label.size(), stdout);
-    printf(" -> ");
-    fwrite(entry.src.data(), 1, entry.src.size(), stdout);
-    printf("\n");
-    // printf("  %.*s -> %.*s\n",
-    //   (int)entry.label.size(), entry.label.data(),
-    //   (int)entry.src.size(), entry.src.data());
-  }
+  println("Finished parsing EPUB");
 
   return EpubLoadResult::Success;
 }
@@ -415,8 +488,14 @@ void unload() {
   g_bumpFront = 0;
   g_bumpBack = BufferSize;
   g_cacheDirectory.reset();
+  g_spine.reset();
   g_toc.reset();
-  g_book.reset();
+  g_tocPath.reset();
+  g_contentPath.reset();
+  g_coverId.reset();
+  g_language.reset();
+  g_author.reset();
+  g_title.reset();
   g_zipEntries.reset();
   if (g_epubFile.has_value()) {
     fclose(*g_epubFile);
@@ -882,9 +961,7 @@ namespace {
   void parseToc(
     StringView tocView,
     Book::TocEntry* entries,
-    char* buffer,
-    size_t& tocs,
-    size_t& neededMemory)
+    size_t& tocs)
   {
     enum class NavDepth {
       Root, Ncx,
@@ -898,23 +975,12 @@ namespace {
 
     auto tryCommitNavPoint = [&]() {
       if (currentTocSrc.size() > 0 && currentTocText.size() > 0) {
-        if (buffer && entries) {
-          printf("TOC Entry: ");
-          fwrite(currentTocText.data(), 1, currentTocText.size(), stdout);
-          printf(" -> ");
-          fwrite(currentTocSrc.data(), 1, currentTocSrc.size(), stdout);
-          printf("\n");
+        if (entries) {
           auto entry = &entries[tocs];
-          std::memcpy(buffer, currentTocText.data(), currentTocText.size());
-          entry->label = StringView(buffer, currentTocText.size());
-          buffer += currentTocText.size();
-          std::memcpy(buffer, currentTocSrc.data(), currentTocSrc.size());
-          entry->src = StringView(buffer, currentTocSrc.size());
-          buffer += currentTocSrc.size();
+          entry->label = *retain(currentTocText);
+          entry->src = *retain(currentTocSrc);
         }
         tocs++;
-        neededMemory += currentTocSrc.size();
-        neededMemory += currentTocText.size();
       }
     };
 
@@ -979,19 +1045,13 @@ namespace {
   Book::EpubLoadResult parseTableOfContents(StringView str) {
     // determine how much space we need to reserve
     size_t entryCount = 0;
-    size_t neededMemory = 0;
-    parseToc(str, nullptr, nullptr, entryCount, neededMemory);
+    parseToc(str, nullptr, entryCount);
 
-    printf("Expected TOC entries: %zu, needed memory: %zu bytes\n", entryCount, neededMemory);
+    printf("Expected TOC entries: %zu\n", entryCount);
 
-    char *stringBuffer = subAlloc<char>(neededMemory);
     Book::TocEntry* tocEntries = subAlloc<Book::TocEntry>(entryCount);
     entryCount = 0;
-    neededMemory = 0;
-    parseToc(str, tocEntries, stringBuffer, entryCount, neededMemory);
-
-    fwrite(stringBuffer, 1, neededMemory, stdout);
-    printf("\n");
+    parseToc(str, tocEntries, entryCount);
 
     g_toc = std::span(tocEntries, entryCount);
 

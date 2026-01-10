@@ -1,30 +1,13 @@
 
 #include <cstdio>
-#include <initializer_list>
-#include <optional>
+
+#include "log.h"
 
 #include "stringview.h"
 #include "stopwatch.h"
 #include "XmlParser.h"
 
-// #include <
 using namespace xml;
-
-void print(StringView str) {
-  fwrite(str.data(), 1, str.size(), stdout);
-}
-
-// Only allow Args to be StringView
-// template<class T, T... Args>
-void println(int indent, std::initializer_list<StringView> args) {
-  for (int i = 0; i < indent; i++) {
-    printf("  ");
-  }
-  for (auto arg : args)
-    print(arg);
-  // (..., print(args));
-  printf("\n");
-}
 
 void testTocParsing(StringView toc);
 
@@ -70,30 +53,30 @@ int main(/* int argc, char *argv[] */) {
     
     switch (ty) {
       case XmlParser::NodeType::Element:
-        println(indent, {parser.name()});
+        iprintln(indent, parser.name());
         {
           auto attrs = parser.attributes();
           while (attrs.next()) {
-            println(indent + 1, {attrs.name(), " = ", attrs.value()});
+            iprintln(indent + 1, attrs.name(), " = ", attrs.value());
           }
         }
         indent++;
         break;
       case XmlParser::NodeType::Text:
-        println(indent, {"\"", parser.text(), "\""});
+        iprintln(indent, "\"", parser.text(), "\"");
         break;
       case XmlParser::NodeType::Comment:
-        println(indent, {"Comment: \"", parser.comment(), "\""});
+        iprintln(indent, "Comment: \"", parser.comment(), "\"");
         break;
       case XmlParser::NodeType::CDATA:
-        println(indent, {"CDATA: \"", parser.cdata(), "\""});
+        iprintln(indent, "CDATA: \"", parser.cdata(), "\"");
         break;
       case XmlParser::NodeType::ProcessingInstruction:
-        println(indent, {"Processing Instruction: \"", parser.processingInstruction(), "\""});
+        iprintln(indent, "Processing Instruction: \"", parser.processingInstruction(), "\"");
         break;
       case XmlParser::NodeType::EndElement:
         indent--;
-        println(indent, {"End Element: \"", parser.name(), "\""});
+        iprintln(indent, "End Element: \"", parser.name(), "\"");
         break;
       default:
         break;
@@ -147,10 +130,10 @@ void testTocParsing(StringView toc) {
   parseToc(toc, title, entries, stringBuffer, tocs, neededMemory);
   printf("Parsing TOC (2nd pass) took %ld microseconds\n", sw.elapsedMicroseconds());
 
-  println(0, {"Title: \"", *title, "\""});
+  iprintln(0, "Title: \"", *title, "\"");
   printf("Parsed TOC:\n");
   for (size_t i = 0; i < tocs; i++) {
-    println(1, {entries[i].label, " -> ", entries[i].src});
+    iprintln(1, entries[i].label, " -> ", entries[i].src);
   }
 }
 

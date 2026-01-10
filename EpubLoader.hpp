@@ -17,15 +17,6 @@ struct SpineEntry {
   std::optional<TocEntry*> tocEntry;
 };
 
-struct TableOfContents {
-  std::span<TocEntry> entries;
-  std::span<SpineEntry> spineEntries;
-};
-
-struct Book {
-  StringView title;
-};
-
 enum class EpubLoadResult {
   Success,
   SdCardAccessFailed,
