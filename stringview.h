@@ -106,8 +106,11 @@ constexpr StringView sliceUntil(char c) const {
     return StringView(data_, newSize);
   }
 
-  constexpr size_t find(char c) const {
-    for (size_t i = 0; i < size_; i++) {
+  constexpr size_t find(char c, size_t offset = 0) const {
+    if (offset >= size_) {
+      return size_;
+    }
+    for (size_t i = offset; i < size_; i++) {
       if (data_[i] == c) {
         return i;
       }
@@ -190,6 +193,13 @@ constexpr StringView sliceUntil(char c) const {
       return false;
     }
     return this->subString(0, prefix.size()) == prefix;
+  }
+
+  constexpr bool endsWith(const StringView suffix) const {
+    if (suffix.size() > size()) {
+      return false;
+    }
+    return this->subString(size() - suffix.size(), suffix.size()) == suffix;
   }
 };
 

@@ -1,6 +1,7 @@
 
 #include <cstdio>
 #include <initializer_list>
+#include <optional>
 
 #include "stringview.h"
 #include "stopwatch.h"
@@ -27,7 +28,17 @@ void println(int indent, std::initializer_list<StringView> args) {
 
 void testTocParsing(StringView toc);
 
+#include "EpubLoader.hpp"
+
 int main(/* int argc, char *argv[] */) {
+  auto result = Book::loadEpub("1. We are Legion - Dennis E. Taylor.epub");
+  Book::unload();
+  if (result != Book::EpubLoadResult::Success) {
+    printf("Failed to load EPUB: %d\n", (int)result);
+    return 1;
+  }
+  return 0;
+
   FILE *tocFile = fopen("toc1.ncx", "rb");
   // FILE *tocFile = fopen("toc2.ncx", "rb");
   // FILE *tocFile = fopen("toc3.ncx", "rb");
@@ -143,6 +154,33 @@ void testTocParsing(StringView toc) {
   }
 }
 
+// void parseContents()
+
+StringView parseTitle(XmlParser parser) {
+  bool expectText = false;
+  while (true) {
+    auto ty = parser.next();
+    if (ty == XmlParser::NodeType::EndOfFile)
+      break;
+    if (ty == XmlParser::NodeType::Element && parser.name().caseCmp("text")) {
+      expectText = true;
+    } else if (ty == XmlParser::NodeType::Text && expectText) {
+      return parser.text();
+    }
+  }
+  return "";
+}
+
+void parseContents(
+  StringView contentsView
+) {
+  XmlParser rootParser { contentsView };
+  // std::optional<XmlParser> manifest;
+  // std::optional<XmlParser> spine;
+
+
+}
+
 void parseToc(
   StringView tocView,
   StringView* title,
@@ -153,7 +191,6 @@ void parseToc(
 {
   enum class NavDepth {
     Root, Ncx,
-    DocTitle, DocText,
     NavMap, NavPoint, NavLabel, Content, NavText
   };
 
@@ -190,55 +227,47 @@ void parseToc(
     switch (ty) {
       case XmlParser::NodeType::Element:
         name = parser.name();
-        if (navDepth == NavDepth::Root && name == "ncx") {
+        if (navDepth == NavDepth::Root && name.caseCmp("ncx")) {
           navDepth = NavDepth::Ncx;
-        } else if (navDepth == NavDepth::Ncx && name == "docTitle") {
-          navDepth = NavDepth::DocTitle;
-        } else if (navDepth == NavDepth::DocTitle && name == "text") {
-          navDepth = NavDepth::DocText;
-        } else if (navDepth == NavDepth::Ncx && name == "navMap") {
+        } else if (navDepth == NavDepth::Ncx && name.caseCmp("docTitle")) {
+          currentTitle = parseTitle(parser);
+        } else if (navDepth == NavDepth::Ncx && name.caseCmp("navMap")) {
           navDepth = NavDepth::NavMap;
-        } else if (navDepth == NavDepth::NavMap && name == "navPoint") {
+        } else if (navDepth == NavDepth::NavMap && name.caseCmp("navPoint")) {
           navDepth = NavDepth::NavPoint;
           currentTocSrc = "";
           currentTocText = "";
-        } else if (navDepth == NavDepth::NavPoint && name == "content") {
+        } else if (navDepth == NavDepth::NavPoint && name.caseCmp("content")) {
           currentTocSrc = parser.getAttribute("src");
           navDepth = NavDepth::Content;
-        } else if (navDepth == NavDepth::NavPoint && name == "navPoint") {
+        } else if (navDepth == NavDepth::NavPoint && name.caseCmp("navPoint")) {
           navDepth = NavDepth::NavPoint;
           tryCommitNavPoint();
-        } else if (navDepth == NavDepth::NavPoint && name == "navLabel") {
+        } else if (navDepth == NavDepth::NavPoint && name.caseCmp("navLabel")) {
           navDepth = NavDepth::NavLabel;
-        } else if (navDepth == NavDepth::NavLabel && name == "text") {
+        } else if (navDepth == NavDepth::NavLabel && name.caseCmp("text")) {
           navDepth = NavDepth::NavText;
         }
         break;
       case XmlParser::NodeType::Text:
         if (navDepth == NavDepth::NavText) {
           currentTocText = parser.text();
-        } else if (navDepth == NavDepth::DocText) {
-          currentTitle = parser.text();
         }
         break;
       case XmlParser::NodeType::EndElement:
         name = parser.name();
-        if (navDepth == NavDepth::NavText && name == "text") {
+        if (navDepth == NavDepth::NavText && name.caseCmp("text")) {
           navDepth = NavDepth::NavLabel;
-        } else if (navDepth == NavDepth::NavLabel && name == "navLabel") {
+        } else if (navDepth == NavDepth::NavLabel && name.caseCmp("navLabel")) {
           navDepth = NavDepth::NavPoint;
-        } else if (navDepth == NavDepth::Content && name == "content") {
+        } else if (navDepth == NavDepth::Content && name.caseCmp("content")) {
           navDepth = NavDepth::NavPoint;
-        } else if (navDepth == NavDepth::NavPoint && name == "navPoint") {
+        } else if (navDepth == NavDepth::NavPoint && name.caseCmp("navPoint")) {
           navDepth = NavDepth::NavMap;
           tryCommitNavPoint();
-        } else if (navDepth == NavDepth::NavMap && name == "navMap") {
+        } else if (navDepth == NavDepth::NavMap && name.caseCmp("navMap")) {
           navDepth = NavDepth::Ncx;
-        } else if (navDepth == NavDepth::DocText && name == "text") {
-          navDepth = NavDepth::DocTitle;
-        } else if (navDepth == NavDepth::DocTitle && name == "docTitle") {
-          navDepth = NavDepth::Ncx;
-        } else if (navDepth == NavDepth::Ncx && name == "ncx") {
+        } else if (navDepth == NavDepth::Ncx && name.caseCmp("ncx")) {
           navDepth = NavDepth::Root;
         }
         break;
