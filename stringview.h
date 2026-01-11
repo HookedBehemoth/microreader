@@ -223,6 +223,11 @@ class StringView {
     }
     return this->subString(size() - suffix.size(), suffix.size()) == suffix;
   }
+
+  constexpr StringView trimWhitespace() const {
+    constexpr StringView WhiteSpaceChars = " \t\r\n";
+    return this->skipAll(WhiteSpaceChars).trimEnd(WhiteSpaceChars);
+  }
 };
 
 template<typename... Args>
@@ -238,6 +243,30 @@ StringView join(char *buffer, size_t bufferSize, Args&&... args) {
     return StringView { nullptr, 0 };
   }
 }
+
+class TocIterator {
+ public:
+  constexpr TocIterator(StringView data_, StringView separator_) : data(data_), separator(separator_) { /* ... */ }
+  constexpr bool hasNext() const {
+    return !data.isEmpty();
+  }
+  constexpr StringView next() {
+    size_t sepPos = data.findAny(separator);
+    if (sepPos == data.size()) {
+      StringView result = data;
+      data = StringView(data.data() + data.size(), 0);
+      return result;
+    } else {
+      StringView result = data.subString(0, sepPos);
+      data = data.subString(sepPos + 1, data.size() - sepPos - 1);
+      return result;
+    }
+  }
+
+ private:
+  StringView data;
+  StringView separator;
+};
 
 constexpr StringView ExampleString = "asdfghjkl";
 
