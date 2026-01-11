@@ -19,15 +19,19 @@ struct SpineEntry {
 
 enum class EpubLoadResult {
   Success,
-  SdCardAccessFailed,
   InvalidFormat,
-  MissingFile,
   OutOfMemory,
+  IoFailure,
+  MissingFile,
   InvalidState,
   Bogus = 69
 };
 
 EpubLoadResult loadEpub(StringView filePath);
+
+std::optional<StringView> getTitle();
+std::optional<StringView> getAuthor();
+std::optional<StringView> getLanguage();
 
 void unload();
 void deleteCache();

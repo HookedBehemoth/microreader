@@ -14,3 +14,4 @@ parser
 *.json
 .vscode
 *test
+*.o

@@ -2,6 +2,7 @@
 
 #include "stringview.h"
 #include <cstdio>
+#include <optional>
 
 // #ifndef ARDUINO
 // #include <cstdio>
@@ -13,23 +14,23 @@
 // #define Log(...) Serial.print(__VA_ARGS__)
 // #endif
 
-void put(StringView str) {
+static inline void put(StringView str) {
   fwrite(str.data(), 1, str.size(), stdout);
 }
 
 template <typename... Args>
-void print(const Args&... args) {
+static inline void print(const Args&... args) {
     (put(args), ...);
 }
 
 template <typename... Args>
-void println(const Args&... args) {
+static inline void println(const Args&... args) {
     print(args...);
     print("\n");
 }
 
 template <typename... Args>
-void iprintln(int indent, const Args&... args) {
+static inline void iprintln(int indent, const Args&... args) {
     for (int i = 0; i < indent; i++) {
         print("  ");
     }
