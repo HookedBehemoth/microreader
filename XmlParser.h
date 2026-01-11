@@ -56,7 +56,7 @@ class XmlParser {
   constexpr StringView getAttribute(StringView attrName) const {
     auto attr = attributes();
     while (attr.next()) {
-      if (caseInsensitiveEquals(attr.name(), attrName)) {
+      if (attr.name().caseCmp(attrName)) {
         return attr.value().sliceUntil('#');
       }
     }

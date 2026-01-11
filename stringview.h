@@ -48,7 +48,7 @@ class StringView {
 
   /// Slice up to (but not including) the first occurrence of character c
   /// If c is not found, returns the entire slice
-constexpr StringView sliceUntil(char c) const {
+  constexpr StringView sliceUntil(char c) const {
     for (size_t i = 0; i < size_; i++) {
       if (data_[i] == c) {
         return StringView(data_, i);
@@ -65,6 +65,15 @@ constexpr StringView sliceUntil(char c) const {
         if (data_[i] == c) {
           return StringView(data_, i);
         }
+      }
+    }
+    return *this;
+  }
+
+  constexpr StringView sliceUntilLast(char c) const {
+    for (size_t i = size_; i > 0; i--) {
+      if (data_[i - 1] == c) {
+        return StringView(data_, i - 1);
       }
     }
     return *this;
@@ -140,6 +149,15 @@ constexpr StringView sliceUntil(char c) const {
     return size_;  // Not found
   }
 
+  constexpr size_t findLast(char c) const {
+    for (size_t i = size_; i > 0; i--) {
+      if (data_[i - 1] == c) {
+        return i - 1;
+      }
+    }
+    return size_;  // Not found
+  }
+
   constexpr bool contains(char c) const {
     return find(c) != size_;
   }
@@ -154,6 +172,10 @@ constexpr StringView sliceUntil(char c) const {
 
   constexpr size_t size() const {
     return size_;
+  }
+
+  constexpr bool isEmpty() const {
+    return size_ == 0;
   }
 
   constexpr bool operator==(const StringView rhs) const {
@@ -203,24 +225,18 @@ constexpr StringView sliceUntil(char c) const {
   }
 };
 
-constexpr bool caseInsensitiveEquals(const StringView lhs, const StringView rhs) {
-  if (lhs.size() != rhs.size()) {
-    return false;
+template<typename... Args>
+StringView join(char *buffer, size_t bufferSize, Args&&... args) {
+  size_t totalSize = 0;
+  ((totalSize += StringView{args}.size()), ...);
+
+  if (buffer && bufferSize >= totalSize) {
+    char* ptr = buffer;
+    ((std::memcpy(ptr, StringView{args}.data(), StringView{args}.size()), ptr += StringView{args}.size()), ...);
+    return StringView { buffer, totalSize };
+  } else {
+    return StringView { nullptr, 0 };
   }
-  for (size_t i = 0; i < lhs.size(); i++) {
-    char c1 = lhs[i];
-    char c2 = rhs[i];
-    if (c1 >= 'A' && c1 <= 'Z') {
-      c1 += 'a' - 'A';
-    }
-    if (c2 >= 'A' && c2 <= 'Z') {
-      c2 += 'a' - 'A';
-    }
-    if (c1 != c2) {
-      return false;
-    }
-  }
-  return true;
 }
 
 constexpr StringView ExampleString = "asdfghjkl";
@@ -230,8 +246,8 @@ static_assert(ExampleString.size() == 9);
 static_assert(ExampleString[2, 4] == "dfgh");
 static_assert(ExampleString[0, 4] == "asdf");
 static_assert(ExampleString[5, 100] == "hjkl");
-static_assert(caseInsensitiveEquals("AbCdEf", "aBcDeF"));
-static_assert(!caseInsensitiveEquals("AbCdEf", "aBcDeG"));
+static_assert(StringView("AbCdEf").caseCmp("aBcDeF"));
+static_assert(!StringView("AbCdEf").caseCmp("aBcDeG"));
 static_assert(ExampleString.sliceUntil('g') == "asdf");
 static_assert(ExampleString.sliceUntil('z') == "asdfghjkl");
 static_assert(ExampleString.sliceUntilAny("xz") == "asdfghjkl");

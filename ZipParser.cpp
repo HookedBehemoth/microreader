@@ -259,10 +259,7 @@ Result<void> unpackEntry(
   if (pathSize > sizeof(pathBuffer)) {
     return std::unexpected(ZipError::InvalidFormat);
   }
-  std::memcpy(pathBuffer, target.data(), target.size());
-  std::memcpy(pathBuffer + target.size(), entry.fileName.data(), entry.fileName.size());
-  pathBuffer[pathSize] = '\0';
-  StringView fullPath { pathBuffer, pathSize };
+  StringView fullPath = join(pathBuffer, sizeof(pathBuffer), target, entry.fileName);
   bool ok = fs::ensurePath(fullPath);
   if (!ok) {
     return std::unexpected(ZipError::IoFailure);

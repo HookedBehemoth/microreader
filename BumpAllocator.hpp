@@ -61,7 +61,7 @@ class BumpAllocator {
       return nullptr;
     }
     bumpFront = (std::byte*)aligned + size - buffer;
-    printf("bumpAlloc: requested %zu bytes, new bump front: %zu\n", size, bumpFront);
+    // printf("bumpAlloc: requested %zu bytes, new bump front: %zu\n", size, bumpFront);
     return (T*)aligned;
   }
 
@@ -83,7 +83,7 @@ class BumpAllocator {
       return nullptr;
     }
     bumpBack = aligned_offset;
-    printf("subAlloc: requested %zu bytes, new bump back: %zu\n", size, bumpBack);
+    // printf("subAlloc: requested %zu bytes, new bump back: %zu\n", size, bumpBack);
     return (T*)aligned;
   }
 
@@ -101,6 +101,36 @@ class BumpAllocator {
     }
     std::memcpy(mem, str.data(), str.size());
     return StringView { mem, str.size() };
+  }
+
+  template<typename... Args>
+  std::optional<StringView> joinTemp(Args&&... args) {
+    size_t totalSize = 0;
+    ((totalSize += StringView{args}.size()), ...);
+
+    char* buffer = bumpAlloc<char>(totalSize);
+    if (buffer) {
+      return std::nullopt;
+    }
+
+    char* ptr = buffer;
+    ((std::memcpy(ptr, StringView{args}.data(), StringView{args}.size()), ptr += StringView{args}.size()), ...);
+    return StringView { buffer, totalSize };
+  }
+
+  template<typename... Args>
+  std::optional<StringView> join(Args&&... args) {
+    size_t totalSize = 0;
+    ((totalSize += StringView{args}.size()), ...);
+
+    char* buffer = subAlloc<char>(totalSize);
+    if (!buffer) {
+      return std::nullopt;
+    }
+
+    char* ptr = buffer;
+    ((std::memcpy(ptr, StringView{args}.data(), StringView{args}.size()), ptr += StringView{args}.size()), ...);
+    return StringView { buffer, totalSize };
   }
 
   /// returns an object that will roll back front bump on destruction

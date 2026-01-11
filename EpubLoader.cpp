@@ -22,6 +22,7 @@ namespace {
   std::optional<StringView> g_language;
   std::optional<StringView> g_coverId;
   std::optional<StringView> g_contentPath;
+  std::optional<StringView> g_contentBasePath;
   std::optional<StringView> g_tocPath;
   std::optional<std::span<Book::SpineEntry>> g_spine;
   std::optional<std::span<Book::TocEntry>> g_toc;
@@ -80,10 +81,10 @@ EpubLoadResult loadEpub(StringView filePath) {
   }
   g_zipEntries = *zipEntries;
 
-  auto unzipResult = zip::unpackFully(fp, *g_zipEntries, *g_cacheDirectory, g_allocator);
-  if (!unzipResult.has_value()) {
-    return fromZipError(unzipResult.error());
-  }
+  // auto unzipResult = zip::unpackFully(fp, *g_zipEntries, *g_cacheDirectory, g_allocator);
+  // if (!unzipResult.has_value()) {
+  //   return fromZipError(unzipResult.error());
+  // }
   {
     auto containerScope = g_allocator.beginFrontScope();
 
@@ -120,6 +121,12 @@ EpubLoadResult loadEpub(StringView filePath) {
     println("Content path: ", *contentPath);
 
     g_contentPath = g_allocator.retain(*contentPath);
+    
+    size_t lastSlashIndex = g_contentPath->findLast('/');
+    printf("Last slash index: %zu (vs %zu)\n", lastSlashIndex, g_contentPath->size());
+    if (lastSlashIndex != g_contentPath->size()) {
+      g_contentBasePath = g_contentPath->subString(0, lastSlashIndex);
+    }
   }
 
   // parse content obf file
@@ -191,6 +198,12 @@ EpubLoadResult loadEpub(StringView filePath) {
 
         if (parser.name().caseCmp("item") && inManifest) {
           auto path = parser.getAttribute("href");
+          char pathBuffer[512];
+          if (g_contentBasePath.has_value()) {
+            path = join(pathBuffer, sizeof(pathBuffer),
+              *g_contentBasePath, StringView("/"), path);
+          }
+
           if (!zip::fileExists(*g_zipEntries, path)) {
             println("Manifest entry refers to missing file: ", path);
             return EpubLoadResult::MissingFile;
@@ -254,6 +267,13 @@ EpubLoadResult loadEpub(StringView filePath) {
 
         // resolve and manifest entry href to file entry
         auto href = manifest->getAttribute("href");
+
+        char pathBuffer[512];
+        if (g_contentBasePath.has_value()) {
+          href = join(pathBuffer, sizeof(pathBuffer),
+            *g_contentBasePath, StringView("/"), href);
+        }
+
         auto fileEntry = zip::findFileEntry(*g_zipEntries, href);
         if (!fileEntry.has_value()) {
           println("Manifest entry refers to missing file: ", href);
@@ -361,11 +381,15 @@ EpubLoadResult loadEpub(StringView filePath) {
     // Assign ToC entries to Spine entries
     std::optional<TocEntry*> currentTocEntry;
     size_t tocIndex = 0;
+    size_t srcSkip = 0;
+    if (g_contentBasePath.has_value()) {
+      srcSkip = g_contentBasePath->size() + 1; // +1 for slash
+    }
     for (auto& spineEntry : *g_spine) {
       std::optional<TocEntry*> matchedTocEntry;
       for (size_t i = tocIndex; i < g_toc->size(); i++) {
         auto& tocEntry = (*g_toc)[i];
-        if (tocEntry.src == spineEntry.src) {
+        if (tocEntry.src == spineEntry.src.skip(srcSkip)) {
           matchedTocEntry = &tocEntry;
           tocIndex = i + 1;
           break;
@@ -403,6 +427,7 @@ void unload() {
   g_spine.reset();
   g_toc.reset();
   g_tocPath.reset();
+  g_contentBasePath.reset();
   g_contentPath.reset();
   g_coverId.reset();
   g_language.reset();
@@ -438,23 +463,15 @@ void deleteCacheForFile(StringView filePath) {
 
 namespace {
   Book::EpubLoadResult ensureCacheDirectory(StringView path) {
-    // int rc = mkdir(ExtractedBase.data(), 0755);
-    // if (rc != 0 && errno != EEXIST) {
-    //   return Book::EpubLoadResult::SdCardAccessFailed;
-    // }
-    // [base]/epub_[name]
-    size_t pathLength = ExtractedBase.size() + 6 + path.size() + 1;
     auto backBumpScope = g_allocator.beginBackScope();
-    char* extractedPath = g_allocator.subAlloc<char>(pathLength);
-    if (extractedPath == nullptr) {
+    auto cacheDirectory = g_allocator.join(
+      ExtractedBase, "/epub_", path, "/"
+    );
+    if (!cacheDirectory.has_value()) {
       return Book::EpubLoadResult::OutOfMemory;
     }
-    std::memcpy(extractedPath, ExtractedBase.data(), ExtractedBase.size());
-    std::memcpy(extractedPath + ExtractedBase.size(), "/epub_", 6);
-    std::memcpy(extractedPath + ExtractedBase.size() + 6, path.data(), path.size());
-    extractedPath[pathLength - 1] = '/';
 
-    g_cacheDirectory = StringView { extractedPath, pathLength };
+    g_cacheDirectory = cacheDirectory;
     bool ok = fs::ensurePath(*g_cacheDirectory);
     if (!ok) {
       backBumpScope.reset();
