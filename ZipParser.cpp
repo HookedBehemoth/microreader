@@ -119,7 +119,7 @@ Result<std::span<ZipFileEntry>> read_central_directory(
     entries[i].compressionMethod = centry.compression;
   }
 
-  printf("Found %lu entries in ZIP:\n", file_count);
+  printf("Found %zu entries in ZIP:\n", file_count);
 
   return std::span { entries, file_count };
 }
