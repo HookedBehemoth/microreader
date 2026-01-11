@@ -35,7 +35,7 @@ class BumpAllocator {
 
   /// get available memory between front and back bumps
   [[nodiscard]]
-  std::size_t availableMemory() {
+  std::size_t availableMemory() const {
     return bumpBack - bumpFront;
   }
 

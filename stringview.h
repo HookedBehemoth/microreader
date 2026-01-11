@@ -228,16 +228,24 @@ class StringView {
     constexpr StringView WhiteSpaceChars = " \t\r\n";
     return this->skipAll(WhiteSpaceChars).trimEnd(WhiteSpaceChars);
   }
+
+  constexpr size_t copyTo(char* buffer, size_t bufferSize) const {
+    size_t copySize = (size_ < bufferSize) ? size_ : bufferSize;
+    for (size_t i = 0; i < copySize; i++) {
+      buffer[i] = data_[i];
+    }
+    return copySize;
+  }
 };
 
 template<typename... Args>
-StringView join(char *buffer, size_t bufferSize, Args&&... args) {
+constexpr StringView join(char *buffer, size_t bufferSize, Args&&... args) {
   size_t totalSize = 0;
   ((totalSize += StringView{args}.size()), ...);
 
   if (buffer && bufferSize >= totalSize) {
     char* ptr = buffer;
-    ((std::memcpy(ptr, StringView{args}.data(), StringView{args}.size()), ptr += StringView{args}.size()), ...);
+    ((ptr += StringView{args}.copyTo(ptr, StringView{args}.size())), ...);
     return StringView { buffer, totalSize };
   } else {
     return StringView { nullptr, 0 };

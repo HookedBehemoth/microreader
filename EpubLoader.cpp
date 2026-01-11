@@ -11,6 +11,7 @@
 #include "Allocator.hpp"
 #include "Fs.hpp"
 #include "ZipParser.hpp"
+#include "EpubCssParser.hpp"
 
 namespace {
   mem::Allocator g_allocator;
@@ -26,6 +27,12 @@ namespace {
   std::optional<StringView> g_tocPath;
   std::optional<std::span<Book::SpineEntry>> g_spine;
   std::optional<std::span<Book::TocEntry>> g_toc;
+
+  struct CssFile {
+    StringView path;
+    std::span<css::CssRule> rules;
+  };
+  std::optional<std::span<CssFile>> g_cssRules;
 
   constexpr StringView ExtractedBase = "microreader";
   std::optional<StringView> g_cacheDirectory;
@@ -123,7 +130,6 @@ EpubLoadResult loadEpub(StringView filePath) {
     g_contentPath = g_allocator.retain(*contentPath);
     
     size_t lastSlashIndex = g_contentPath->findLast('/');
-    printf("Last slash index: %zu (vs %zu)\n", lastSlashIndex, g_contentPath->size());
     if (lastSlashIndex != g_contentPath->size()) {
       g_contentBasePath = g_contentPath->subString(0, lastSlashIndex);
     }
@@ -249,9 +255,10 @@ EpubLoadResult loadEpub(StringView filePath) {
     struct ManifestEntry {
       StringView id;
       StringView href;
+      StringView mediaType;
     };
     ManifestEntry* manifestEntries = g_allocator.bumpAlloc<ManifestEntry>(manifestEntryCount);
-  
+
     ManifestEntry* manifestIt = manifestEntries;
     while (true) {
       auto ty = manifest->next();
@@ -264,6 +271,7 @@ EpubLoadResult loadEpub(StringView filePath) {
         auto &entry = *manifestIt++;
         
         entry.id = manifest->getAttribute("id");
+        entry.mediaType = manifest->getAttribute("media-type");
 
         // resolve and manifest entry href to file entry
         auto href = manifest->getAttribute("href");
@@ -301,14 +309,9 @@ EpubLoadResult loadEpub(StringView filePath) {
     if (tocPath.has_value()) {
       g_tocPath = resolveManifestEntry(*tocPath);
       if (!g_tocPath.has_value()) {
-        printf("TOC path in spine does not exist in manifest: ");
-        fwrite(tocPath->data(), 1, tocPath->size(), stdout);
-        printf("\n");
+        println("TOC path in spine does not exist in manifest: ", *tocPath);
         return EpubLoadResult::InvalidFormat;
       }
-      printf("Found TOC path in content file: ");
-      fwrite(tocPath->data(), 1, tocPath->size(), stdout);
-      printf("\n");
     }
 
     // permanent spine allocation
@@ -336,20 +339,62 @@ EpubLoadResult loadEpub(StringView filePath) {
 
         auto hrefOpt = resolveManifestEntry(idref);
         if (!hrefOpt.has_value()) {
-          printf("Spine entry refers to missing manifest id: ");
-          fwrite(idref.data(), 1, idref.size(), stdout);
-          printf("\n");
+          println("Spine entry refers to missing manifest id: ", idref);
           return EpubLoadResult::InvalidFormat;
         }
         entry.src = *hrefOpt;
-        printf("Spine entry: ");
-        fwrite(entry.idref.data(), 1, entry.idref.size(), stdout);
-        printf(" -> ");
-        fwrite(entry.src.data(), 1, entry.src.size(), stdout);
-        printf("\n");
       } else if (ty == xml::XmlParser::NodeType::EndElement) {
         if (spine->name().caseCmp("spine")) {
           break;
+        }
+      }
+    }
+
+    // Parse CSS files
+    size_t cssFileCount = 0;
+    for (size_t j = 0; j < manifestEntryCount; j++) {
+      const auto& entry = manifestEntries[j];
+      if (entry.mediaType == "text/css") {
+        cssFileCount++;
+      }
+    }
+    printf("Found %zu CSS files in manifest\n", cssFileCount);
+    auto scope = g_allocator.beginFrontScope();
+    auto cssFiles = g_allocator.bumpAlloc<CssFile>(cssFileCount);
+    if (!cssFiles) {
+      printf("Out of memory allocating CSS file entries\n");
+    } else {
+      cssFileCount = 0;
+      for (size_t j = 0; j < manifestEntryCount; j++) {
+        const auto& entry = manifestEntries[j];
+        if (entry.mediaType == "text/css") {
+          auto scope = g_allocator.beginFrontScope();
+          auto cssFileData = zip::loadTempEntry(*g_epubFile, *g_zipEntries, entry.href, g_allocator);
+          if (!cssFileData.has_value()) {
+            println("Failed to load CSS file: ", entry.href);
+            continue;
+          }
+          StringView cssFileView = StringView { (char*)cssFileData->data(), cssFileData->size() };
+          auto cssRules = css::parseSheet(cssFileView, g_allocator);
+          if (cssRules.size() == 0) {
+            println("No CSS rules found in file: ", entry.href);
+            continue;
+          }
+          cssFiles[cssFileCount] = CssFile {
+            .path = entry.href,
+            .rules = cssRules
+          };
+          cssFileCount++;
+        }
+      }
+
+      // Move actual rules to permanent storage
+      if (cssFileCount > 0) {
+        printf("Storing %zu CSS files permanently\n", cssFileCount);
+        auto permanentCssFiles = g_allocator.subAlloc<CssFile>(cssFileCount);
+        if (permanentCssFiles) {
+            std::memcpy(permanentCssFiles, cssFiles, sizeof(CssFile) * cssFileCount);
+            g_cssRules = std::span<CssFile> { permanentCssFiles, cssFileCount };
         }
       }
     }
@@ -367,15 +412,6 @@ EpubLoadResult loadEpub(StringView filePath) {
     result = parseTableOfContents(tocView);
     if (result != EpubLoadResult::Success) {
       return result;
-    }
-
-    printf("Table of Contents loaded, %zu entries\n", g_toc->size());
-    for (const auto &entry : *g_toc) {
-      printf("TOC Entry: ");
-      fwrite(entry.label.data(), 1, entry.label.size(), stdout);
-      printf(" -> ");
-      fwrite(entry.src.data(), 1, entry.src.size(), stdout);
-      printf("\n");
     }
 
     // Assign ToC entries to Spine entries
@@ -400,18 +436,6 @@ EpubLoadResult loadEpub(StringView filePath) {
       }
       spineEntry.tocEntry = currentTocEntry;
     }
-
-    for (const auto& spineEntry : *g_spine) {
-      printf("Spine Entry: ");
-      fwrite(spineEntry.src.data(), 1, spineEntry.src.size(), stdout);
-      if (spineEntry.tocEntry.has_value()) {
-        printf(" -> TOC: ");
-        fwrite((*spineEntry.tocEntry)->label.data(), 1, (*spineEntry.tocEntry)->label.size(), stdout);
-      } else {
-        printf(" -> TOC: (none)");
-      }
-      printf("\n");
-    }
   }
 
   println("Finished parsing EPUB");
@@ -424,8 +448,9 @@ void unload() {
   g_allocator.dumpState();
   g_allocator.reset();
   g_cacheDirectory.reset();
-  g_spine.reset();
+  g_cssRules.reset();
   g_toc.reset();
+  g_spine.reset();
   g_tocPath.reset();
   g_contentBasePath.reset();
   g_contentPath.reset();
@@ -605,7 +630,7 @@ namespace {
     size_t entryCount = 0;
     parseToc(str, nullptr, entryCount);
 
-    printf("Expected TOC entries: %zu\n", entryCount);
+    printf("Expecting %zu TOC entries\n", entryCount);
 
     Book::TocEntry* tocEntries = g_allocator.subAlloc<Book::TocEntry>(entryCount);
     entryCount = 0;

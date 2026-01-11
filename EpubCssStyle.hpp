@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <cstdint>
+#include <cstdio>
 
 namespace css {
 
@@ -70,12 +71,43 @@ struct CssStyle {
     }
   }
 
+  constexpr bool any() const {
+    return textAlign.has_value() ||
+           fontStyle.has_value() ||
+           fontWeight.has_value() ||
+           textIndent.has_value();
+  }
+
   // Reset to default values
   void reset() {
     textAlign.reset();
     fontStyle.reset();
     fontWeight.reset();
     textIndent.reset();
+  }
+
+  void dump() const {
+    printf("CssStyle {\n");
+    if (textAlign.has_value()) {
+      printf("  text-align: ");
+      switch (*textAlign) {
+        case TextAlign::Left:    printf("left\n"); break;
+        case TextAlign::Right:   printf("right\n"); break;
+        case TextAlign::Center:  printf("center\n"); break;
+        case TextAlign::Justify: printf("justify\n"); break;
+        default:                 printf("none\n"); break;
+      }
+    }
+    if (fontStyle.has_value()) {
+      printf("  font-style: %s\n", (*fontStyle == CssFontStyle::Italic) ? "italic" : "normal");
+    }
+    if (fontWeight.has_value()) {
+      printf("  font-weight: %s\n", (*fontWeight == CssFontWeight::Bold) ? "bold" : "normal");
+    }
+    if (textIndent.has_value()) {
+      printf("  text-indent: %.2fpx\n", *textIndent);
+    }
+    printf("}\n");
   }
 };
 
