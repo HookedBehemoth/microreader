@@ -25,7 +25,7 @@ Things that are always needed and never get moved might as well be static.
 
 | Structure     | Size (bytes) | Notes                                                    |
 |---------------|--------------|----------------------------------------------------------|
-| ZipFileEntry  | 20           | StringView(8) + 3×uint32_t(12) + uint16_t(2) + padding(2) → 24 aligned |
+| ZipFileEntry  | 24           | StringView(8) + 3×uint32_t(12) + uint16_t(2) + padding(2)|
 | TocEntry      | 12           | StringView(8) + uint32_t(4)                              |
 | SpineEntry    | 20           | StringView(8) + uint32_t(4) + optional<uint32_t>(8)      |
 

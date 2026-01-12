@@ -345,7 +345,10 @@ Result<ZipFileEntry> findFileEntry(std::span<ZipFileEntry> entries, StringView p
 }
 
 Result<uint32_t> findFileEntryIndex(std::span<ZipFileEntry> entries, StringView path) {
-  for (uint32_t i = 0; i < entries.size(); i++) {
+  if (entries.size() > UINT32_MAX) {
+    return std::unexpected(ZipError::SizeTooLarge);
+  }
+  for (uint32_t i = 0; i < static_cast<uint32_t>(entries.size()); i++) {
     if (entries[i].fileName.caseCmp(path)) {
       return i;
     }

@@ -625,6 +625,12 @@ namespace {
 
     printf("Expected TOC entries: %zu\n", entryCount);
 
+    // Sanity check: ensure entry count fits in uint32_t for index storage
+    if (entryCount > UINT32_MAX) {
+      printf("TOC entry count exceeds uint32_t limit\n");
+      return Book::EpubLoadResult::InvalidFormat;
+    }
+
     Book::TocEntry* tocEntries = g_allocator.subAlloc<Book::TocEntry>(entryCount);
     entryCount = 0;
     parseToc(str, tocEntries, entryCount, basePath);
