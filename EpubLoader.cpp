@@ -27,7 +27,7 @@ namespace {
   std::optional<std::span<Book::SpineEntry>> g_spine;
   std::optional<std::span<Book::TocEntry>> g_toc;
   // Separate array for spine->toc mapping to avoid std::optional bloat in SpineEntry
-  // UINT16_MAX means no toc entry assigned
+  constexpr uint16_t NO_TOC_ENTRY = UINT16_MAX;
   std::optional<std::span<uint16_t>> g_spineTocIndices;
 
   constexpr StringView ExtractedBase = "microreader";
@@ -328,9 +328,9 @@ EpubLoadResult loadEpub(StringView filePath) {
       printf("Out of memory allocating spine toc indices\n");
       return EpubLoadResult::OutOfMemory;
     }
-    // Initialize all to UINT16_MAX (no toc entry)
+    // Initialize all to NO_TOC_ENTRY
     for (size_t i = 0; i < spineEntryCount; i++) {
-      spineTocIndices[i] = UINT16_MAX;
+      spineTocIndices[i] = NO_TOC_ENTRY;
     }
 
     g_spine = std::span<SpineEntry>(spineEntries, spineEntryCount);
@@ -392,7 +392,8 @@ EpubLoadResult loadEpub(StringView filePath) {
     }
 
     // Assign ToC entries to Spine entries using separate index array
-    uint16_t currentTocIndex = UINT16_MAX;
+    // Each spine entry gets the most recent matching TOC entry (for chapter grouping)
+    uint16_t currentTocIndex = NO_TOC_ENTRY;
     size_t searchStart = 0;
     for (size_t spineIdx = 0; spineIdx < g_spine->size(); spineIdx++) {
       const auto& spineEntry = (*g_spine)[spineIdx];
@@ -411,7 +412,7 @@ EpubLoadResult loadEpub(StringView filePath) {
       const auto& spineEntry = (*g_spine)[i];
       printf("Spine Entry: %u", spineEntry.zipEntryIndex);
       uint16_t tocIdx = (*g_spineTocIndices)[i];
-      if (tocIdx != UINT16_MAX) {
+      if (tocIdx != NO_TOC_ENTRY) {
         const auto& tocEntry = (*g_toc)[tocIdx];
         printf(" -> TOC: ");
         fwrite(tocEntry.label.data(), 1, tocEntry.label.size(), stdout);
