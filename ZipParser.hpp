@@ -13,7 +13,8 @@ enum class ZipError {
   InvalidFormat,
   MissingFile,
   OutOfMemory,
-  IoFailure
+  IoFailure,
+  SizeTooLarge
 };
 
 template<typename T>
@@ -21,8 +22,8 @@ using Result = std::expected<T, ZipError>;
 
 struct ZipFileEntry {
   StringView fileName;
-  uint64_t compressedSize;
-  uint64_t uncompressedSize;
+  uint32_t compressedSize;
+  uint32_t uncompressedSize;
   uint32_t localHeaderOffset;
   uint16_t compressionMethod;
 };
@@ -48,6 +49,7 @@ Result<std::span<std::byte>> loadTempEntry(
   mem::Allocator& allocator
 );
 Result<ZipFileEntry> findFileEntry(std::span<ZipFileEntry> entries, StringView path);
+Result<uint32_t> findFileEntryIndex(std::span<ZipFileEntry> entries, StringView path);
 bool fileExists(std::span<ZipFileEntry> entries, StringView path);
 
 } // namespace zip

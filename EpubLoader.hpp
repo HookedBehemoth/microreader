@@ -1,6 +1,7 @@
 #pragma once
 
 #include "stringview.h"
+#include <cstdint>
 #include <optional>
 #include <span>
 
@@ -8,13 +9,13 @@ namespace Book {
 
 struct TocEntry {
   StringView label;
-  StringView src;
+  uint32_t zipEntryIndex;
 };
 
 struct SpineEntry {
   StringView idref;
-  StringView src;
-  std::optional<TocEntry*> tocEntry;
+  uint32_t zipEntryIndex;
+  std::optional<uint32_t> tocEntryIndex;
 };
 
 enum class EpubLoadResult {

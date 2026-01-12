@@ -344,6 +344,16 @@ Result<ZipFileEntry> findFileEntry(std::span<ZipFileEntry> entries, StringView p
   return std::unexpected(ZipError::MissingFile);
 }
 
+Result<uint32_t> findFileEntryIndex(std::span<ZipFileEntry> entries, StringView path) {
+  for (uint32_t i = 0; i < entries.size(); i++) {
+    if (entries[i].fileName.caseCmp(path)) {
+      return i;
+    }
+  }
+
+  return std::unexpected(ZipError::MissingFile);
+}
+
 bool fileExists(std::span<ZipFileEntry> entries, StringView path) {
   return findFileEntry(entries, path).has_value();
 }
