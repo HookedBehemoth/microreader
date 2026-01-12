@@ -86,6 +86,12 @@ Result<std::span<ZipFileEntry>> read_central_directory(
   mem::Allocator& allocator
 ) {
   size_t file_count = eocd.total_entries;
+  
+  // Reject ZIPs with more than UINT16_MAX files
+  if (file_count > UINT16_MAX) {
+    return std::unexpected(ZipError::SizeTooLarge);
+  }
+  
   ZipFileEntry* entries = allocator.subAlloc<ZipFileEntry>(file_count);
   if (!entries) {
     return std::unexpected(ZipError::OutOfMemory);
@@ -344,11 +350,11 @@ Result<ZipFileEntry> findFileEntry(std::span<ZipFileEntry> entries, StringView p
   return std::unexpected(ZipError::MissingFile);
 }
 
-Result<uint32_t> findFileEntryIndex(std::span<ZipFileEntry> entries, StringView path) {
-  if (entries.size() > UINT32_MAX) {
+Result<uint16_t> findFileEntryIndex(std::span<ZipFileEntry> entries, StringView path) {
+  if (entries.size() > UINT16_MAX) {
     return std::unexpected(ZipError::SizeTooLarge);
   }
-  for (uint32_t i = 0; i < static_cast<uint32_t>(entries.size()); i++) {
+  for (uint16_t i = 0; i < static_cast<uint16_t>(entries.size()); i++) {
     if (entries[i].fileName.caseCmp(path)) {
       return i;
     }

@@ -23,9 +23,12 @@ namespace {
   std::optional<StringView> g_coverId;
   std::optional<StringView> g_contentPath;
   std::optional<StringView> g_contentBasePath;
-  std::optional<uint32_t> g_tocZipIndex;
+  std::optional<uint16_t> g_tocZipIndex;
   std::optional<std::span<Book::SpineEntry>> g_spine;
   std::optional<std::span<Book::TocEntry>> g_toc;
+  // Separate array for spine->toc mapping to avoid std::optional bloat in SpineEntry
+  // UINT16_MAX means no toc entry assigned
+  std::optional<std::span<uint16_t>> g_spineTocIndices;
 
   constexpr StringView ExtractedBase = "microreader";
   std::optional<StringView> g_cacheDirectory;
@@ -248,7 +251,7 @@ EpubLoadResult loadEpub(StringView filePath) {
     // temporary allocation
     struct ManifestEntry {
       StringView id;
-      uint32_t zipEntryIndex;
+      uint16_t zipEntryIndex;
     };
     ManifestEntry* manifestEntries = g_allocator.bumpAlloc<ManifestEntry>(manifestEntryCount);
   
@@ -288,7 +291,7 @@ EpubLoadResult loadEpub(StringView filePath) {
       }
     }
 
-    auto resolveManifestEntry = [&](StringView id) -> std::optional<uint32_t> {
+    auto resolveManifestEntry = [&](StringView id) -> std::optional<uint16_t> {
       for (size_t j = 0; j < manifestEntryCount; j++) {
         if (manifestEntries[j].id == id) {
           return manifestEntries[j].zipEntryIndex;
@@ -318,8 +321,20 @@ EpubLoadResult loadEpub(StringView filePath) {
       printf("Out of memory allocating spine entries\n");
       return EpubLoadResult::OutOfMemory;
     }
+    
+    // Separate array for spine->toc mapping (UINT16_MAX = no toc entry)
+    uint16_t* spineTocIndices = g_allocator.subAlloc<uint16_t>(spineEntryCount);
+    if (!spineTocIndices) {
+      printf("Out of memory allocating spine toc indices\n");
+      return EpubLoadResult::OutOfMemory;
+    }
+    // Initialize all to UINT16_MAX (no toc entry)
+    for (size_t i = 0; i < spineEntryCount; i++) {
+      spineTocIndices[i] = UINT16_MAX;
+    }
 
     g_spine = std::span<SpineEntry>(spineEntries, spineEntryCount);
+    g_spineTocIndices = std::span<uint16_t>(spineTocIndices, spineEntryCount);
 
     SpineEntry* spineIt = spineEntries;
     while (true) {
@@ -376,29 +391,28 @@ EpubLoadResult loadEpub(StringView filePath) {
       printf(" -> %u\n", entry.zipEntryIndex);
     }
 
-    // Assign ToC entries to Spine entries
-    std::optional<uint32_t> currentTocIndex;
+    // Assign ToC entries to Spine entries using separate index array
+    uint16_t currentTocIndex = UINT16_MAX;
     size_t searchStart = 0;
-    for (auto& spineEntry : *g_spine) {
-      std::optional<uint32_t> matchedTocIndex;
+    for (size_t spineIdx = 0; spineIdx < g_spine->size(); spineIdx++) {
+      const auto& spineEntry = (*g_spine)[spineIdx];
       for (size_t i = searchStart; i < g_toc->size(); i++) {
         auto& tocEntry = (*g_toc)[i];
         if (tocEntry.zipEntryIndex == spineEntry.zipEntryIndex) {
-          matchedTocIndex = static_cast<uint32_t>(i);
+          currentTocIndex = static_cast<uint16_t>(i);
           searchStart = i + 1;
           break;
         }
       }
-      if (matchedTocIndex.has_value()) {
-        currentTocIndex = matchedTocIndex;
-      }
-      spineEntry.tocEntryIndex = currentTocIndex;
+      (*g_spineTocIndices)[spineIdx] = currentTocIndex;
     }
 
-    for (const auto& spineEntry : *g_spine) {
+    for (size_t i = 0; i < g_spine->size(); i++) {
+      const auto& spineEntry = (*g_spine)[i];
       printf("Spine Entry: %u", spineEntry.zipEntryIndex);
-      if (spineEntry.tocEntryIndex.has_value()) {
-        const auto& tocEntry = (*g_toc)[*spineEntry.tocEntryIndex];
+      uint16_t tocIdx = (*g_spineTocIndices)[i];
+      if (tocIdx != UINT16_MAX) {
+        const auto& tocEntry = (*g_toc)[tocIdx];
         printf(" -> TOC: ");
         fwrite(tocEntry.label.data(), 1, tocEntry.label.size(), stdout);
       } else {
@@ -418,6 +432,7 @@ void unload() {
   g_allocator.dumpState();
   g_allocator.reset();
   g_cacheDirectory.reset();
+  g_spineTocIndices.reset();
   g_spine.reset();
   g_toc.reset();
   g_tocZipIndex.reset();
@@ -625,9 +640,9 @@ namespace {
 
     printf("Expected TOC entries: %zu\n", entryCount);
 
-    // Sanity check: ensure entry count fits in uint32_t for index storage
-    if (entryCount > UINT32_MAX) {
-      printf("TOC entry count exceeds uint32_t limit\n");
+    // Sanity check: ensure entry count fits in uint16_t for index storage
+    if (entryCount > UINT16_MAX) {
+      printf("TOC entry count exceeds uint16_t limit\n");
       return Book::EpubLoadResult::InvalidFormat;
     }
 

@@ -9,13 +9,12 @@ namespace Book {
 
 struct TocEntry {
   StringView label;
-  uint32_t zipEntryIndex;
+  uint16_t zipEntryIndex;
 };
 
 struct SpineEntry {
   StringView idref;
-  uint32_t zipEntryIndex;
-  std::optional<uint32_t> tocEntryIndex;
+  uint16_t zipEntryIndex;
 };
 
 enum class EpubLoadResult {

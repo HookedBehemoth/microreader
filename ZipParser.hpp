@@ -49,7 +49,7 @@ Result<std::span<std::byte>> loadTempEntry(
   mem::Allocator& allocator
 );
 Result<ZipFileEntry> findFileEntry(std::span<ZipFileEntry> entries, StringView path);
-Result<uint32_t> findFileEntryIndex(std::span<ZipFileEntry> entries, StringView path);
+Result<uint16_t> findFileEntryIndex(std::span<ZipFileEntry> entries, StringView path);
 bool fileExists(std::span<ZipFileEntry> entries, StringView path);
 
 } // namespace zip
