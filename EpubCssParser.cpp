@@ -2,6 +2,7 @@
 #include "Allocator.hpp"
 #include "EpubCssStyle.hpp"
 #include "stringview.h"
+#include <charconv>
 #include <cstdlib>
 #include <cstring>
 
@@ -61,11 +62,9 @@ constexpr CssStyle parseInlineImpl(StringView styleStr) {
       if (value.size() == 0) {
         continue;
       }
-      char parseBuffer[32] = {};
-      StringView indentStr = join(parseBuffer, sizeof(parseBuffer), value, "\0");
-      float indentValue = static_cast<float>(atof(indentStr.data())) * factor;
-      if (indentValue > 0.0f) {
-        style.textIndent = static_cast<uint8_t>(indentValue);
+      float indentValue = 0.0f;
+      if (std::from_chars(value.begin(), value.end(), indentValue)) {
+        style.textIndent = static_cast<uint8_t>(indentValue * factor);
       }
     }
   }
