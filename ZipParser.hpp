@@ -17,7 +17,7 @@ enum class ZipError {
   TooManyFiles
 };
 
-template<typename T>
+template<typename T = void>
 using Result = std::expected<T, ZipError>;
 
 struct ZipFileEntry {
@@ -27,7 +27,12 @@ struct ZipFileEntry {
 };
 
 Result<std::span<ZipFileEntry>> parseZip(FILE* fp, mem::Allocator& allocator);
-using UnpackWriteCallback = size_t (*)(const void* data, size_t size, size_t count, void* user_data); 
+using UnpackWriteCallback = size_t (*)(const void* data, size_t size, size_t count, void* user_data);
+Result<void> streamFileEntry(
+  FILE* fp, const ZipFileEntry& entry,
+  UnpackWriteCallback writeCallback, void* userData,
+  mem::Allocator& allocator
+);
 Result<void> unpackEntry(
   FILE* fp, const ZipFileEntry& entry,
   StringView target,

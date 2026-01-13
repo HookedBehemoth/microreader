@@ -133,10 +133,12 @@ Result<std::span<ZipFileEntry>> read_central_directory(
   return std::span { entries, file_count };
 }
 
-Result<void> unpackFile(
+}
+
+Result<void> streamFileEntry(
   FILE* fp, const ZipFileEntry& entry,
   UnpackWriteCallback writeCallback, void* userData,
-  mem::Allocator& g_allocator
+  mem::Allocator& allocator
 ) {
   /* Seek to local file header */
   file_seek_impl(fp, entry.localHeaderOffset, SEEK_SET);
@@ -165,10 +167,10 @@ Result<void> unpackFile(
 
   file_seek_impl(fp, lfh.filename_len + lfh.extra_len, SEEK_CUR);
 
-  auto frontBumpScope = g_allocator.beginFrontScope();
+  auto frontBumpScope = allocator.beginFrontScope();
   if (lfh.compression == 0) {
     const size_t ChunkSize = 32 * 1024;
-    auto* chunkBuffer = g_allocator.bumpAlloc<uint8_t>(ChunkSize);
+    auto* chunkBuffer = allocator.bumpAlloc<uint8_t>(ChunkSize);
     size_t remaining = lfh.compressed_size;
     while (remaining > 0) {
       size_t toRead = (remaining > ChunkSize) ? ChunkSize : remaining;
@@ -184,9 +186,9 @@ Result<void> unpackFile(
     }
   } else if (lfh.compression == 8) {
     const size_t ChunkSize = 8 * 1024;
-    auto* inflator = g_allocator.bumpAlloc<tinfl_decompressor>();
-    auto* in_buf = g_allocator.bumpAlloc<uint8_t>(ChunkSize);
-    auto* dict = g_allocator.bumpAlloc<uint8_t>(TINFL_LZ_DICT_SIZE);
+    auto* inflator = allocator.bumpAlloc<tinfl_decompressor>();
+    auto* in_buf = allocator.bumpAlloc<uint8_t>(ChunkSize);
+    auto* dict = allocator.bumpAlloc<uint8_t>(TINFL_LZ_DICT_SIZE);
     memset(inflator, 0, sizeof(tinfl_decompressor));
     memset(in_buf, 0, ChunkSize);
     memset(dict, 0, TINFL_LZ_DICT_SIZE);
@@ -248,8 +250,6 @@ Result<void> unpackFile(
   return {};
 }
 
-}
-
 Result<std::span<ZipFileEntry>> parseZip(FILE* fp, mem::Allocator& allocator) {
   fseeko(fp, 0, SEEK_END);
   size_t fileSize = ftello(fp);
@@ -290,7 +290,7 @@ Result<void> unpackEntry(
     return std::unexpected(ZipError::IoFailure);
   }
 
-  auto result = unpackFile(
+  auto result = streamFileEntry(
     fp, entry,
     (UnpackWriteCallback)&fwrite, (void*)targetFile,
     allocator);
@@ -329,7 +329,7 @@ Result<std::span<std::byte>> loadTempEntry(
     return size * count;
   };
   std::byte* writePtr = buffer;
-  auto result = unpackFile(fp, entry, writeCallback, (void*)&writePtr, allocator);
+  auto result = streamFileEntry(fp, entry, writeCallback, (void*)&writePtr, allocator);
   if (!result.has_value()) {
     return std::unexpected(result.error());
   }
