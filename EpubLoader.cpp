@@ -15,7 +15,8 @@
 #include "EpubCssParser.hpp"
 
 namespace {
-  mem::Allocator g_allocator;
+  constinit std::byte g_buffer[mem::AllocatorSize];
+  constinit mem::Allocator g_allocator(g_buffer);
 
   std::optional<FILE*> g_epubFile;
   std::optional<std::span<zip::ZipFileEntry>> g_zipEntries;

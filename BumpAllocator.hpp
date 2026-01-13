@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -24,7 +25,7 @@ constexpr char UninitializedCanary = 0xCC;
 template<size_t BufferSize>
 class BumpAllocator {
  private:
-  std::byte buffer[BufferSize];
+  std::byte* buffer;
   std::size_t bumpFront = 0;
   std::size_t bumpBack = BufferSize;
   friend class FrontBumpScope<BufferSize>;
@@ -36,7 +37,7 @@ class BumpAllocator {
   BumpAllocator& operator=(BumpAllocator&&) = delete;
 
  public:
-  constexpr BumpAllocator() { reset();/* ... */ }
+  constexpr BumpAllocator(std::byte (&buffer_)[BufferSize]) : buffer(buffer_) { reset();/* ... */ }
 
   /// get available memory between front and back bumps
   [[nodiscard]]
@@ -45,9 +46,9 @@ class BumpAllocator {
   }
 
   /// reset the allocator to empty state
-  void reset() {
+  constexpr void reset() {
 #ifdef MEMCANARY
-    std::memset(buffer, UninitializedCanary, BufferSize);
+    std::fill_n(buffer, BufferSize, UninitializedCanary);
 #endif
     bumpFront = 0;
     bumpBack = BufferSize;
