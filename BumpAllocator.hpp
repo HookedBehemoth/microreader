@@ -28,6 +28,7 @@ class BumpAllocator {
   std::byte* buffer;
   std::size_t bumpFront = 0;
   std::size_t bumpBack = BufferSize;
+  std::size_t maxUsed = 0;
   friend class FrontBumpScope<BufferSize>;
   friend class BackBumpScope<BufferSize>;
 
@@ -41,8 +42,18 @@ class BumpAllocator {
 
   /// get available memory between front and back bumps
   [[nodiscard]]
-  std::size_t availableMemory() const {
+  constexpr std::size_t availableMemory() const {
     return bumpBack - bumpFront;
+  }
+
+  [[nodiscard]]
+  constexpr std::size_t maxUsedMemory() const {
+    return maxUsed;
+  }
+
+  [[nodiscard]]
+  constexpr std::size_t usedMemory() const {
+    return BufferSize - availableMemory();
   }
 
   /// reset the allocator to empty state
@@ -75,6 +86,7 @@ class BumpAllocator {
     }
 #endif
     bumpFront = (std::byte*)aligned + size - buffer;
+    maxUsed = std::max(maxUsed, usedMemory());
     // printf("bumpAlloc: requested %zu bytes, new bump front: %zu\n", size, bumpFront);
     return (T*)aligned;
   }
@@ -104,6 +116,7 @@ class BumpAllocator {
     }
 #endif
     bumpBack = aligned_offset;
+    maxUsed = std::max(maxUsed, usedMemory());
     // printf("subAlloc: requested %zu bytes, new bump back: %zu\n", size, bumpBack);
     return (T*)aligned;
   }
@@ -196,6 +209,7 @@ class BumpAllocator {
     printf("  Used memory: %zu bytes\n", BufferSize - availableMemory());
     printf("  Used front bump: %zu bytes\n", bumpFront);
     printf("  Used back bump: %zu bytes\n", BufferSize - bumpBack);
+    printf("  Max used memory: %zu bytes\n", maxUsed);
   }
 };
 

@@ -137,6 +137,8 @@ EpubLoadResult loadEpub(StringView filePath) {
     if (lastSlashIndex != g_contentPath->size()) {
       g_contentBasePath = g_contentPath->subString(0, lastSlashIndex);
     }
+
+    printf("Container parsed (used memory: %zu bytes, max used memory: %zu bytes)\n", g_allocator.usedMemory(), g_allocator.maxUsedMemory());
   }
   g_allocator.subCanary("___ContentPath__");
 
@@ -410,6 +412,7 @@ EpubLoadResult loadEpub(StringView filePath) {
         g_allocator.subCanary("____CssFiles____");
       }
     }
+    printf("Content parsed (used memory: %zu bytes, max used memory: %zu bytes)\n", g_allocator.usedMemory(), g_allocator.maxUsedMemory());
   }
 
   if (g_tocZipIndex.has_value()) {
@@ -459,6 +462,7 @@ EpubLoadResult loadEpub(StringView filePath) {
     }
 
     g_spineTocIndices = std::span<uint16_t>(spineTocIndices, spineEntryCount);
+    printf("TOC parsed (used memory: %zu bytes, max used memory: %zu bytes)\n", g_allocator.usedMemory(), g_allocator.maxUsedMemory());
   }
 
   println("Finished parsing EPUB");
