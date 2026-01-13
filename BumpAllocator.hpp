@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <span>
 
 #include "stringview.h"
 
@@ -13,6 +15,9 @@ template<size_t BufferSize>
 class FrontBumpScope;
 template<size_t BufferSize>
 class BackBumpScope;
+
+constexpr char AlignCanary = 0xAA;
+constexpr char UninitializedCanary = 0xCC;
 
 /// A double ended bump allocator
 /// Semi-permanent allocations should be made from the back.
@@ -31,7 +36,7 @@ class BumpAllocator {
   BumpAllocator& operator=(BumpAllocator&&) = delete;
 
  public:
-  BumpAllocator() { /* ... */ }
+  constexpr BumpAllocator() { reset();/* ... */ }
 
   /// get available memory between front and back bumps
   [[nodiscard]]
@@ -41,7 +46,9 @@ class BumpAllocator {
 
   /// reset the allocator to empty state
   void reset() {
-    std::memset(buffer, 0, BufferSize);
+#ifdef MEMCANARY
+    std::memset(buffer, UninitializedCanary, BufferSize);
+#endif
     bumpFront = 0;
     bumpBack = BufferSize;
   }
@@ -60,6 +67,12 @@ class BumpAllocator {
     if ((std::byte*)aligned + size > (std::byte*)buffer + bumpBack) {
       return nullptr;
     }
+#ifdef MEMCANARY
+    if ((std::byte*)aligned > (std::byte*)buffer + bumpFront) {
+      // Fill the gap with canaries for debugging
+      std::memset(buffer + bumpFront, AlignCanary, (std::byte*)aligned - (std::byte*)buffer - bumpFront);
+    }
+#endif
     bumpFront = (std::byte*)aligned + size - buffer;
     // printf("bumpAlloc: requested %zu bytes, new bump front: %zu\n", size, bumpFront);
     return (T*)aligned;
@@ -82,14 +95,36 @@ class BumpAllocator {
     if ((std::byte*)aligned + size > (std::byte*)buffer + bumpBack) {
       return nullptr;
     }
+#ifdef MEMCANARY
+    if (aligned_offset + size != bumpBack) {
+      // Fill the gap with canaries for debugging
+      printf("Padding canaries from %zu to %zu\n", aligned_offset + size, bumpBack);
+      std::memset(buffer + aligned_offset + size, AlignCanary, bumpBack - (aligned_offset + size));
+    }
+#endif
     bumpBack = aligned_offset;
     // printf("subAlloc: requested %zu bytes, new bump back: %zu\n", size, bumpBack);
     return (T*)aligned;
   }
 
+  void subCanary(const char (&canary)[17]) {
+#ifdef MEMCANARY
+    *subAlloc<uint32_t>(1) = 0xFFFFFFFF;
+    size_t canarySize = 16;
+    if (canarySize > availableMemory()) {
+      return;
+    }
+    std::memcpy(buffer + bumpBack - canarySize, canary, canarySize);
+    bumpBack -= canarySize;
+    *subAlloc<uint32_t>(1) = 0xFFFFFFFF;
+#else
+    (void)canary;
+#endif
+  }
+
   /// fill unused memory with zeros for sanity checking
   void sanityCheck() {
-    std::memset(buffer + bumpFront, 0x00, availableMemory());
+    std::memset(buffer + bumpFront, UninitializedCanary, availableMemory());
   }
 
   /// retain the given string in the back bump area
@@ -143,6 +178,14 @@ class BumpAllocator {
   [[nodiscard]]
   BackBumpScope<BufferSize> beginBackScope() {
     return BackBumpScope<BufferSize>(*this);
+  }
+
+  std::span<std::byte> getFrontMemorySpan() {
+    return std::span<std::byte>(buffer, bumpFront);
+  }
+
+  std::span<std::byte> getBackMemorySpan() {
+    return std::span<std::byte>(buffer + bumpBack, BufferSize - bumpBack);
   }
 
   void dumpState() {

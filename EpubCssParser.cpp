@@ -65,7 +65,7 @@ constexpr CssStyle parseInlineImpl(StringView styleStr) {
       StringView indentStr = join(parseBuffer, sizeof(parseBuffer), value, "\0");
       float indentValue = static_cast<float>(atof(indentStr.data())) * factor;
       if (indentValue > 0.0f) {
-        style.textIndent = indentValue;
+        style.textIndent = static_cast<uint8_t>(indentValue);
       }
     }
   }
@@ -205,6 +205,7 @@ std::span<CssRule> parseSheet(
   if (!rules) {
     return {};
   }
+  allocator.subCanary("____CssRules____");
   parseSheet(sheet, rules, ruleCount);
 
   auto rulesSpan = std::span<CssRule>(rules, ruleCount);
@@ -213,6 +214,7 @@ std::span<CssRule> parseSheet(
   for (auto& rule : rulesSpan) {
     rule.selector = *allocator.retain(rule.selector);
   }
+  allocator.subCanary("__CssSelectors__");
 
   return rulesSpan;
 }

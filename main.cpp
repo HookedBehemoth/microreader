@@ -27,6 +27,34 @@ int main(/* int argc, char *argv[] */) {
       return 1;
     }
     println("\"", *Book::getTitle(), "\" by \"", *Book::getAuthor(), "\" (", *Book::getLanguage(), ")");
+
+#if false
+    for (uint16_t i = 0; i < *Book::getSpineEntryCount(); i++) {
+      auto fileEntry = Book::getZipFileEntry(*Book::getSpineZipFileIndex(i));
+      auto tocIndexOpt = Book::getTocForSpineEntry(i);
+      if (tocIndexOpt.has_value()) {
+        auto tocLabel = Book::getTocLabel(*tocIndexOpt);
+        println("Spine Entry ", fileEntry->fileName, " -> ", *tocLabel);
+      } else {
+        println("Spine Entry ", fileEntry->fileName, " -> (no TOC entry)");
+      }
+    }
+
+    auto css = Book::getCssRules();
+    if (css.has_value()) {
+      println("CSS Rules:");
+      for (const auto& cssFile : *css) {
+        auto file = Book::getZipFileEntry(cssFile.zipIndex);
+        println("CSS File Index: ", file->fileName);
+        for (const auto& rule : cssFile.rules) {
+          println("Selector: ", rule.selector);
+          rule.style.dump();
+        }
+      }
+    } else {
+      println("No CSS Rules found.");
+    }
+#endif
     
     Book::unload();
     printf("Successfully loaded and unloaded EPUB file: %.*s\n\n", (int)file.size(), file.data());

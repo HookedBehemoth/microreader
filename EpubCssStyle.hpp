@@ -1,8 +1,9 @@
 #pragma once
 
-#include <optional>
 #include <cstdint>
 #include <cstdio>
+
+#include "optional.hpp"
 
 namespace css {
 
@@ -21,6 +22,7 @@ enum class TextAlign : uint8_t {
  * Font style values (italic)
  */
 enum class CssFontStyle : uint8_t {
+  None,    // Default none style
   Normal,  // Default normal style
   Italic   // Italic text
 };
@@ -29,6 +31,7 @@ enum class CssFontStyle : uint8_t {
  * Font weight values (bold)
  */
 enum class CssFontWeight : uint8_t {
+  None,    // Default none weight
   Normal,  // Default normal weight
   Bold     // Bold text
 };
@@ -49,11 +52,11 @@ enum class CssFontWeight : uint8_t {
  * - margin-top/bottom (for paragraph spacing)
  */
 struct CssStyle {
-  std::optional<TextAlign> textAlign;
-  std::optional<CssFontStyle> fontStyle;
-  std::optional<CssFontWeight> fontWeight;
+  tiny::optional<TextAlign, TextAlign::None> textAlign;
+  tiny::optional<CssFontStyle, CssFontStyle::None> fontStyle;
+  tiny::optional<CssFontWeight, CssFontWeight::None> fontWeight;
   // Text-indent support (in CSS units, stored here as pixels approximation)
-  std::optional<float> textIndent;
+  tiny::optional<uint8_t, 0xFF> textIndent;
 
   // Merge another style into this one (other style takes precedence)
   void merge(const CssStyle& other) {
@@ -105,7 +108,7 @@ struct CssStyle {
       printf("  font-weight: %s\n", (*fontWeight == CssFontWeight::Bold) ? "bold" : "normal");
     }
     if (textIndent.has_value()) {
-      printf("  text-indent: %.2fpx\n", *textIndent);
+      printf("  text-indent: %hhupx\n", *textIndent);
     }
     printf("}\n");
   }

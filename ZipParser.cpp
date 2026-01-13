@@ -71,8 +71,12 @@ static bool find_end_central_dir(
 
   /* Search backwards for signature */
   for (int i = read_size - 22; i >= 0; i--) {
-    uint32_t* sig = (uint32_t*)&buf[i];
-    if (*sig == ZIP_END_CENTRAL_SIG) {
+    uint32_t sig;
+    sig = (*(uint8_t*)&buf[i + 0] << 0) |
+          (*(uint8_t*)&buf[i + 1] << 8) |
+          (*(uint8_t*)&buf[i + 2] << 16) |
+          (*(uint8_t*)&buf[i + 3] << 24);
+    if (sig == ZIP_END_CENTRAL_SIG) {
       memcpy(eocd, &buf[i], sizeof(zip_end_central_dir));
       return true;
     }
@@ -86,10 +90,17 @@ Result<std::span<ZipFileEntry>> read_central_directory(
   mem::Allocator& allocator
 ) {
   size_t file_count = eocd.total_entries;
+  
+  // Reject ZIPs with more than UINT16_MAX files
+  if (file_count > UINT16_MAX) {
+    return std::unexpected(ZipError::TooManyFiles);
+  }
+  
   ZipFileEntry* entries = allocator.subAlloc<ZipFileEntry>(file_count);
   if (!entries) {
     return std::unexpected(ZipError::OutOfMemory);
   }
+  allocator.subCanary("__ZipFileEntry__");
 
   file_seek_impl(fp, eocd.central_dir_offset, SEEK_SET);
   for (size_t i = 0; i < file_count; i++) {
@@ -99,7 +110,7 @@ Result<std::span<ZipFileEntry>> read_central_directory(
       return std::unexpected(ZipError::InvalidFormat);
     }
 
-    char* filename = allocator.subAlloc<char>(centry.filename_len + 1);
+    char* filename = allocator.subAlloc<char>(centry.filename_len);
     if (!filename) {
       return std::unexpected(ZipError::OutOfMemory);
     }
@@ -107,17 +118,15 @@ Result<std::span<ZipFileEntry>> read_central_directory(
     if (read_size != centry.filename_len) {
       return std::unexpected(ZipError::InvalidFormat);
     }
-    filename[centry.filename_len] = '\0';
 
     // Skip extra and comment
     file_seek_impl(fp, centry.extra_len + centry.comment_len, SEEK_CUR);
 
     entries[i].fileName = StringView { filename, centry.filename_len };
-    entries[i].compressedSize = centry.compressed_size;
     entries[i].uncompressedSize = centry.uncompressed_size;
     entries[i].localHeaderOffset = centry.local_header_offset;
-    entries[i].compressionMethod = centry.compression;
   }
+  allocator.subCanary("__ZipFileNames__");
 
   printf("Found %zu entries in ZIP:\n", file_count);
 
@@ -132,30 +141,35 @@ Result<void> unpackFile(
   /* Seek to local file header */
   file_seek_impl(fp, entry.localHeaderOffset, SEEK_SET);
 
+  struct local_file_header {
+    uint32_t signature;
+    uint16_t version_needed;
+    uint16_t flags;
+    uint16_t compression;
+    uint16_t mod_time;
+    uint16_t mod_date;
+    uint32_t crc32;
+    uint32_t compressed_size;
+    uint32_t uncompressed_size;
+    uint16_t filename_len;
+    uint16_t extra_len;
+  } __attribute__((packed));
+  static_assert(sizeof(local_file_header) == 30);
+
   /* Read local header to skip to data */
-  uint32_t sig;
-  uint16_t version_needed, flags, compression_method;
-  file_read_impl(&sig, 4, 1, fp);
-  if (sig != ZIP_LOCAL_HEADER_SIG) {
+  local_file_header lfh;
+  size_t read_size = file_read_impl(&lfh, sizeof(local_file_header), 1, fp);
+  if (read_size != 1 || lfh.signature != ZIP_LOCAL_HEADER_SIG) {
     return std::unexpected(ZipError::InvalidFormat);
   }
 
-  file_read_impl(&version_needed, 2, 1, fp);
-  file_read_impl(&flags, 2, 1, fp);
-  file_read_impl(&compression_method, 2, 1, fp);
-
-  file_seek_impl(fp, 16, SEEK_CUR);
-  uint16_t filename_len, extra_len;
-  file_read_impl(&filename_len, 2, 1, fp);
-  file_read_impl(&extra_len, 2, 1, fp);
-
-  file_seek_impl(fp, filename_len + extra_len, SEEK_CUR);
+  file_seek_impl(fp, lfh.filename_len + lfh.extra_len, SEEK_CUR);
 
   auto frontBumpScope = g_allocator.beginFrontScope();
-  if (entry.compressionMethod == 0) {
+  if (lfh.compression == 0) {
     const size_t ChunkSize = 32 * 1024;
     auto* chunkBuffer = g_allocator.bumpAlloc<uint8_t>(ChunkSize);
-    size_t remaining = entry.compressedSize;
+    size_t remaining = lfh.compressed_size;
     while (remaining > 0) {
       size_t toRead = (remaining > ChunkSize) ? ChunkSize : remaining;
       size_t readSize = file_read_impl(chunkBuffer, 1, toRead, fp);
@@ -168,7 +182,7 @@ Result<void> unpackFile(
       }
       remaining -= toRead;
     }
-  } else if (entry.compressionMethod == 8) {
+  } else if (lfh.compression == 8) {
     const size_t ChunkSize = 8 * 1024;
     auto* inflator = g_allocator.bumpAlloc<tinfl_decompressor>();
     auto* in_buf = g_allocator.bumpAlloc<uint8_t>(ChunkSize);
@@ -178,7 +192,7 @@ Result<void> unpackFile(
     memset(dict, 0, TINFL_LZ_DICT_SIZE);
     tinfl_init(inflator);
 
-    size_t in_remaining = entry.compressedSize;
+    size_t in_remaining = lfh.compressed_size;
     size_t in_buf_size = 0;
     size_t in_buf_ofs = 0;
     size_t dict_ofs = 0;
@@ -338,6 +352,19 @@ Result<ZipFileEntry> findFileEntry(std::span<ZipFileEntry> entries, StringView p
   for (const auto& entry : entries) {
     if (entry.fileName.caseCmp(path)) {
       return entry;
+    }
+  }
+
+  return std::unexpected(ZipError::MissingFile);
+}
+
+Result<uint16_t> findFileEntryIndex(std::span<ZipFileEntry> entries, StringView path) {
+  if (entries.size() > UINT16_MAX) {
+    return std::unexpected(ZipError::TooManyFiles);
+  }
+  for (uint16_t i = 0; i < static_cast<uint16_t>(entries.size()); i++) {
+    if (entries[i].fileName.caseCmp(path)) {
+      return i;
     }
   }
 

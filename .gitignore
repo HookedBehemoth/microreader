@@ -15,5 +15,6 @@ parser
 .vscode
 *test
 *.o
+*.d
 *.txt
 *.pos

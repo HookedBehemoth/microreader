@@ -3,6 +3,7 @@
 #include "XmlParser.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <expected>
 #include <optional>
@@ -24,15 +25,15 @@ namespace {
   std::optional<StringView> g_coverId;
   std::optional<StringView> g_contentPath;
   std::optional<StringView> g_contentBasePath;
-  std::optional<StringView> g_tocPath;
-  std::optional<std::span<Book::SpineEntry>> g_spine;
-  std::optional<std::span<Book::TocEntry>> g_toc;
+  std::optional<uint16_t> g_tocZipIndex;
+  std::optional<std::span<uint16_t>> g_spineZipIndices;
+  std::optional<std::span<uint16_t>> g_spineTocIndices;
+  std::optional<std::span<StringView>> g_tocLabels;
+  std::optional<std::span<uint16_t>> g_tocZipIndices;
+  // Separate array for spine->toc mapping to avoid std::optional bloat in SpineEntry
+  constexpr uint16_t NO_TOC_ENTRY = UINT16_MAX;
 
-  struct CssFile {
-    StringView path;
-    std::span<css::CssRule> rules;
-  };
-  std::optional<std::span<CssFile>> g_cssRules;
+  std::optional<std::span<Book::CssFile>> g_cssRules;
 
   constexpr StringView ExtractedBase = "microreader";
   std::optional<StringView> g_cacheDirectory;
@@ -60,6 +61,8 @@ namespace {
         return EpubLoadResult::IoFailure;
       case zip::ZipError::MissingFile:
         return EpubLoadResult::MissingFile;
+      case zip::ZipError::TooManyFiles:
+        return EpubLoadResult::InvalidFormat;
       default:
         return EpubLoadResult::InvalidState;
     }
@@ -134,6 +137,7 @@ EpubLoadResult loadEpub(StringView filePath) {
       g_contentBasePath = g_contentPath->subString(0, lastSlashIndex);
     }
   }
+  g_allocator.subCanary("___ContentPath__");
 
   // parse content obf file
   {
@@ -238,6 +242,8 @@ EpubLoadResult loadEpub(StringView filePath) {
     if (language.has_value()) g_language = g_allocator.retain(*language);
     if (coverId.has_value()) g_coverId = g_allocator.retain(*coverId);
 
+    g_allocator.subCanary("____Metadata____");
+
     if (manifestEntryCount == 0) {
       printf("No manifest entries found in content file\n");
       return EpubLoadResult::InvalidFormat;
@@ -254,7 +260,7 @@ EpubLoadResult loadEpub(StringView filePath) {
     // temporary allocation
     struct ManifestEntry {
       StringView id;
-      StringView href;
+      uint16_t zipEntryIndex;
       StringView mediaType;
     };
     ManifestEntry* manifestEntries = g_allocator.bumpAlloc<ManifestEntry>(manifestEntryCount);
@@ -273,7 +279,7 @@ EpubLoadResult loadEpub(StringView filePath) {
         entry.id = manifest->getAttribute("id");
         entry.mediaType = manifest->getAttribute("media-type");
 
-        // resolve and manifest entry href to file entry
+        // resolve and manifest entry href to file entry index
         auto href = manifest->getAttribute("href");
 
         char pathBuffer[512];
@@ -282,13 +288,13 @@ EpubLoadResult loadEpub(StringView filePath) {
             *g_contentBasePath, StringView("/"), href);
         }
 
-        auto fileEntry = zip::findFileEntry(*g_zipEntries, href);
-        if (!fileEntry.has_value()) {
+        auto fileEntryIndex = zip::findFileEntryIndex(*g_zipEntries, href);
+        if (!fileEntryIndex.has_value()) {
           println("Manifest entry refers to missing file: ", href);
-          return fromZipError(fileEntry.error());
+          return fromZipError(fileEntryIndex.error());
         }
 
-        entry.href = fileEntry->fileName;
+        entry.zipEntryIndex = *fileEntryIndex;
       } else if (ty == xml::XmlParser::NodeType::EndElement) {
         if (manifest->name().caseCmp("manifest")) {
           break;
@@ -296,10 +302,10 @@ EpubLoadResult loadEpub(StringView filePath) {
       }
     }
 
-    auto resolveManifestEntry = [&](StringView id) -> std::optional<StringView> {
+    auto resolveManifestEntry = [&](StringView id) -> std::optional<uint16_t> {
       for (size_t j = 0; j < manifestEntryCount; j++) {
         if (manifestEntries[j].id == id) {
-          return manifestEntries[j].href;
+          return manifestEntries[j].zipEntryIndex;
         }
       }
       return std::nullopt;
@@ -307,23 +313,27 @@ EpubLoadResult loadEpub(StringView filePath) {
 
     // resolve ncx entry to path
     if (tocPath.has_value()) {
-      g_tocPath = resolveManifestEntry(*tocPath);
-      if (!g_tocPath.has_value()) {
+      auto tocIndex = resolveManifestEntry(*tocPath);
+      if (!tocIndex.has_value()) {
         println("TOC path in spine does not exist in manifest: ", *tocPath);
         return EpubLoadResult::InvalidFormat;
       }
+      g_tocZipIndex = *tocIndex;
     }
 
     // permanent spine allocation
-    SpineEntry* spineEntries = g_allocator.subAlloc<SpineEntry>(spineEntryCount);
-    if (!spineEntries) {
+    uint16_t* spineZipIndices = g_allocator.subAlloc<uint16_t>(spineEntryCount);
+    if (!spineZipIndices) {
       printf("Out of memory allocating spine entries\n");
       return EpubLoadResult::OutOfMemory;
     }
+    g_allocator.subCanary("__SpineZipIdx___");
 
-    g_spine = std::span<SpineEntry>(spineEntries, spineEntryCount);
+    StringView* spineIds = g_allocator.bumpAlloc<StringView>(spineEntryCount);
 
-    SpineEntry* spineIt = spineEntries;
+    g_spineZipIndices = std::span<uint16_t>(spineZipIndices, spineEntryCount);
+
+    size_t spineIdx = 0;
     while (true) {
       auto ty = spine->next();
       if (ty == xml::XmlParser::NodeType::EndOfFile)
@@ -332,17 +342,16 @@ EpubLoadResult loadEpub(StringView filePath) {
         if (!spine->name().caseCmp("itemref"))
           continue;
         
-        auto &entry = *spineIt++;
-        
         auto idref = spine->getAttribute("idref");
-        entry.idref = idref;
+        spineIds[spineIdx] = idref;
 
-        auto hrefOpt = resolveManifestEntry(idref);
-        if (!hrefOpt.has_value()) {
+        auto indexOpt = resolveManifestEntry(idref);
+        if (!indexOpt.has_value()) {
           println("Spine entry refers to missing manifest id: ", idref);
           return EpubLoadResult::InvalidFormat;
         }
-        entry.src = *hrefOpt;
+        spineZipIndices[spineIdx] = *indexOpt;
+        spineIdx++;
       } else if (ty == xml::XmlParser::NodeType::EndElement) {
         if (spine->name().caseCmp("spine")) {
           break;
@@ -369,19 +378,20 @@ EpubLoadResult loadEpub(StringView filePath) {
         const auto& entry = manifestEntries[j];
         if (entry.mediaType == "text/css") {
           auto scope = g_allocator.beginFrontScope();
-          auto cssFileData = zip::loadTempEntry(*g_epubFile, *g_zipEntries, entry.href, g_allocator);
+          auto zipEntry = (*g_zipEntries)[entry.zipEntryIndex];
+          auto cssFileData = zip::loadTempEntry(*g_epubFile, zipEntry, g_allocator);
           if (!cssFileData.has_value()) {
-            println("Failed to load CSS file: ", entry.href);
+            println("Failed to load CSS file: ", zipEntry.fileName);
             continue;
           }
           StringView cssFileView = StringView { (char*)cssFileData->data(), cssFileData->size() };
           auto cssRules = css::parseSheet(cssFileView, g_allocator);
           if (cssRules.size() == 0) {
-            println("No CSS rules found in file: ", entry.href);
+            println("No CSS rules found in file: ", zipEntry.fileName);
             continue;
           }
           cssFiles[cssFileCount] = CssFile {
-            .path = entry.href,
+            .zipIndex = entry.zipEntryIndex,
             .rules = cssRules
           };
           cssFileCount++;
@@ -396,15 +406,17 @@ EpubLoadResult loadEpub(StringView filePath) {
             std::memcpy(permanentCssFiles, cssFiles, sizeof(CssFile) * cssFileCount);
             g_cssRules = std::span<CssFile> { permanentCssFiles, cssFileCount };
         }
+        g_allocator.subCanary("____CssFiles____");
       }
     }
   }
 
-  if (g_tocPath.has_value()) {
+  if (g_tocZipIndex.has_value()) {
     auto tocScope = g_allocator.beginFrontScope();
-    auto tocFile = zip::loadTempEntry(*g_epubFile, *g_zipEntries, *g_tocPath, g_allocator);
+    const auto& tocEntry = (*g_zipEntries)[*g_tocZipIndex];
+    auto tocFile = zip::loadTempEntry(*g_epubFile, tocEntry, g_allocator);
     if (!tocFile.has_value()) {
-      println("Failed to load TOC file: ", *g_tocPath);
+      printf("Failed to load TOC file at index: %u\n", *g_tocZipIndex);
       return fromZipError(tocFile.error());
     }
     StringView tocView = StringView { (char*)tocFile->data(), tocFile->size() };
@@ -414,31 +426,54 @@ EpubLoadResult loadEpub(StringView filePath) {
       return result;
     }
 
-    // Assign ToC entries to Spine entries
-    std::optional<TocEntry*> currentTocEntry;
-    size_t tocIndex = 0;
-    size_t srcSkip = 0;
-    if (g_contentBasePath.has_value()) {
-      srcSkip = g_contentBasePath->size() + 1; // +1 for slash
+    // Separate array for spine->toc mapping (UINT16_MAX = no toc entry)
+    size_t spineEntryCount = g_spineZipIndices->size();
+    uint16_t* spineTocIndices = g_allocator.subAlloc<uint16_t>(spineEntryCount);
+    if (!spineTocIndices) {
+      printf("Out of memory allocating spine toc indices\n");
+      return EpubLoadResult::OutOfMemory;
     }
-    for (auto& spineEntry : *g_spine) {
-      std::optional<TocEntry*> matchedTocEntry;
-      for (size_t i = tocIndex; i < g_toc->size(); i++) {
-        auto& tocEntry = (*g_toc)[i];
-        if (tocEntry.src == spineEntry.src.skip(srcSkip)) {
-          matchedTocEntry = &tocEntry;
-          tocIndex = i + 1;
+    g_allocator.subCanary("__SpineTocIdx___");
+    // Initialize all to NO_TOC_ENTRY
+    for (size_t i = 0; i < spineEntryCount; i++) {
+      spineTocIndices[i] = NO_TOC_ENTRY;
+    }
+
+    // Assign ToC entries to Spine entries using separate index array
+    // Each spine entry gets the most recent matching TOC entry (for chapter grouping)
+    uint16_t currentTocIndex = NO_TOC_ENTRY;
+    size_t searchStart = 0;
+    size_t tocCount = g_tocZipIndices->size();
+    for (size_t spineIdx = 0; spineIdx < spineEntryCount; spineIdx++) {
+      const auto& spineZipEntry = (*g_spineZipIndices)[spineIdx];
+      for (size_t i = searchStart; i < tocCount; i++) {
+        auto& tocEntry = (*g_tocZipIndices)[i];
+        if (tocEntry == spineZipEntry) {
+          currentTocIndex = static_cast<uint16_t>(i);
+          searchStart = i + 1;
           break;
         }
       }
-      if (matchedTocEntry != std::nullopt) {
-        currentTocEntry = matchedTocEntry;
-      }
-      spineEntry.tocEntry = currentTocEntry;
+      spineTocIndices[spineIdx] = currentTocIndex;
     }
+
+    g_spineTocIndices = std::span<uint16_t>(spineTocIndices, spineEntryCount);
   }
 
   println("Finished parsing EPUB");
+
+#ifdef MEMCANARY
+  g_allocator.sanityCheck();
+
+  char memDumpPath[512];
+  join(memDumpPath, sizeof(memDumpPath), *g_cacheDirectory, "/memdump.bin\0");
+  FILE* memDump = std::fopen(memDumpPath, "wb");
+  if (memDump) {
+    auto backSpan = g_allocator.getBackMemorySpan();
+    std::fwrite(backSpan.data(), 1, backSpan.size(), memDump);
+    std::fclose(memDump);
+  }
+#endif
 
   return EpubLoadResult::Success;
 }
@@ -449,9 +484,11 @@ void unload() {
   g_allocator.reset();
   g_cacheDirectory.reset();
   g_cssRules.reset();
-  g_toc.reset();
-  g_spine.reset();
-  g_tocPath.reset();
+  g_spineTocIndices.reset();
+  g_spineZipIndices.reset();
+  g_tocLabels.reset();
+  g_tocZipIndices.reset();
+  g_tocZipIndex.reset();
   g_contentBasePath.reset();
   g_contentPath.reset();
   g_coverId.reset();
@@ -475,6 +512,56 @@ std::optional<StringView> getAuthor() {
 
 std::optional<StringView> getLanguage() {
   return g_language;
+}
+
+std::optional<uint16_t> getSpineEntryCount() {
+  if (!g_spineZipIndices.has_value() || g_spineZipIndices->size() > UINT16_MAX) {
+    return std::nullopt;
+  }
+  return static_cast<uint16_t>(g_spineZipIndices->size());
+}
+
+std::optional<uint16_t> getSpineZipFileIndex(uint16_t spineIndex) {
+  if (!g_spineZipIndices.has_value() || spineIndex >= g_spineZipIndices->size()) {
+    return std::nullopt;
+  }
+  return (*g_spineZipIndices)[spineIndex];
+}
+
+std::optional<uint16_t> getTocForSpineEntry(uint16_t spineIndex) {
+  if (!g_spineTocIndices.has_value() || spineIndex >= g_spineTocIndices->size()) {
+    return std::nullopt;
+  }
+  auto tocIndex = (*g_spineTocIndices)[spineIndex];
+  if (tocIndex == NO_TOC_ENTRY) {
+    return std::nullopt;
+  }
+  return tocIndex;
+}
+
+std::optional<uint16_t> getTocEntryCount() {
+  if (!g_tocZipIndices.has_value() || g_tocZipIndices->size() > UINT16_MAX) {
+    return std::nullopt;
+  }
+  return static_cast<uint16_t>(g_tocZipIndices->size());
+}
+
+std::optional<StringView> getTocLabel(uint16_t tocIndex) {
+  if (!g_tocLabels.has_value() || tocIndex >= g_tocLabels->size()) {
+    return std::nullopt;
+  }
+  return (*g_tocLabels)[tocIndex];
+}
+
+std::optional<zip::ZipFileEntry> getZipFileEntry(uint16_t zipIndex) {
+  if (!g_zipEntries.has_value() || zipIndex >= g_zipEntries->size()) {
+    return std::nullopt;
+  }
+  return (*g_zipEntries)[zipIndex];
+}
+
+std::optional<std::span<Book::CssFile>> getCssRules() {
+  return g_cssRules;
 }
 
 void deleteCache() {
@@ -543,8 +630,10 @@ namespace {
 
   void parseToc(
     StringView tocView,
-    Book::TocEntry* entries,
-    size_t& tocs)
+    StringView* tocLabels,
+    uint16_t* tocZipIndices,
+    size_t& tocs,
+    StringView contentBasePath)
   {
     enum class NavDepth {
       Root, Ncx,
@@ -558,10 +647,29 @@ namespace {
 
     auto tryCommitNavPoint = [&]() {
       if (currentTocSrc.size() > 0 && currentTocText.size() > 0) {
-        if (entries) {
-          auto entry = &entries[tocs];
-          entry->label = *g_allocator.retain(currentTocText);
-          entry->src = *g_allocator.retain(currentTocSrc);
+        // Strip any anchor (#...) from the src path
+        StringView srcPath = currentTocSrc.sliceUntil('#');
+        
+        // Build full path relative to content base
+        char pathBuffer[512];
+        StringView fullPath;
+        if (contentBasePath.size() > 0) {
+          fullPath = join(pathBuffer, sizeof(pathBuffer),
+            contentBasePath, StringView("/"), srcPath);
+        } else {
+          fullPath = srcPath;
+        }
+
+        // Try to find the zip entry index
+        auto indexResult = zip::findFileEntryIndex(*g_zipEntries, fullPath);
+        if (!indexResult.has_value()) {
+          // File not found, skip this entry
+          return;
+        }
+
+        if (tocLabels && tocZipIndices) {
+          tocLabels[tocs] = *g_allocator.retain(currentTocText);
+          tocZipIndices[tocs] = *indexResult;
         }
         tocs++;
       }
@@ -626,17 +734,31 @@ namespace {
   }
 
   Book::EpubLoadResult parseTableOfContents(StringView str) {
+    // Get the content base path for resolving relative paths
+    StringView basePath = g_contentBasePath.has_value() ? *g_contentBasePath : StringView{};
+    
     // determine how much space we need to reserve
     size_t entryCount = 0;
-    parseToc(str, nullptr, entryCount);
+    parseToc(str, nullptr, nullptr, entryCount, basePath);
 
     printf("Expecting %zu TOC entries\n", entryCount);
 
-    Book::TocEntry* tocEntries = g_allocator.subAlloc<Book::TocEntry>(entryCount);
-    entryCount = 0;
-    parseToc(str, tocEntries, entryCount);
+    // Sanity check: ensure entry count fits in uint16_t for index storage
+    if (entryCount > UINT16_MAX) {
+      printf("TOC entry count exceeds uint16_t limit\n");
+      return Book::EpubLoadResult::InvalidFormat;
+    }
 
-    g_toc = std::span(tocEntries, entryCount);
+    StringView* tocLabels = g_allocator.subAlloc<StringView>(entryCount);
+    g_allocator.subCanary("___TocLabels____");
+    uint16_t* tocZipIndices = g_allocator.subAlloc<uint16_t>(entryCount);
+    g_allocator.subCanary("___TocIndices___");
+    entryCount = 0;
+    parseToc(str, tocLabels, tocZipIndices, entryCount, basePath);
+    g_allocator.subCanary("____TocNames____");
+
+    g_tocLabels = std::span(tocLabels, entryCount);
+    g_tocZipIndices = std::span(tocZipIndices, entryCount);
 
     return Book::EpubLoadResult::Success;
   }

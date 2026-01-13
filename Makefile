@@ -1,18 +1,28 @@
-CXX = clang++
+CXX = clang++ -m32 -g #-fsanitize=undefined
 
-SOURCES = main.cpp XmlParser.cpp EpubLoader.cpp EpubCssParser.cpp ZipParser.cpp Fs.cpp miniz.cpp
-OBJECTS = $(SOURCES:.cpp=.o)
-FLAGS = -Os -Wall -Wextra -std=c++26 -fno-exceptions -Wno-unused-function
+# DEFINES := -DMEMCANARY
+SOURCES := main.cpp XmlParser.cpp EpubLoader.cpp EpubCssParser.cpp ZipParser.cpp Fs.cpp miniz.cpp
+OBJECTS := $(patsubst %.cpp,build/%.o,$(SOURCES))
+DEPENDS := $(patsubst %.cpp,build/%.d,$(SOURCES))
+
+FLAGS := $(DEFINES) -Os -Wall -Wextra -std=c++26 -fno-exceptions -Wno-unused-function -MMD
 
 parser: $(OBJECTS)
-	$(CXX) -m32 -g -o parser $(OBJECTS) $(LDFLAGS)
+	$(CXX) -o parser $(OBJECTS) $(LDFLAGS)
+build/%.o: %.cpp | build
+	$(CXX) $(FLAGS) -c $< -o $@
 
-%.o: %.cpp
-	$(CXX) -m32 -g $(FLAGS) -c $< -o $@
+build:
+	mkdir -p build
 
 test: XmlTest.cpp XmlParser.cpp
-	$(CXX) -m32 -g $(FLAGS) -o xmltest XmlTest.cpp XmlParser.cpp
+	$(CXX) $(FLAGS) -o xmltest XmlTest.cpp XmlParser.cpp
 	./xmltest
 
 clean:
-	rm parser xmltest $(OBJECTS)
+	rm -rf build
+	rm -f parser xmltest
+
+.PHONY: all clean
+
+-include $(DEPENDS)

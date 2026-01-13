@@ -1,23 +1,20 @@
 #pragma once
 
-#include "stringview.h"
+#include <cstdint>
 #include <optional>
 #include <span>
+#include "EpubCssParser.hpp"
+#include "stringview.h"
+#include "ZipParser.hpp"
 
 namespace Book {
 
-struct TocEntry {
-  StringView label;
-  StringView src;
+struct CssFile {
+  uint16_t zipIndex;
+  std::span<css::CssRule> rules;
 };
 
-struct SpineEntry {
-  StringView idref;
-  StringView src;
-  std::optional<TocEntry*> tocEntry;
-};
-
-enum class EpubLoadResult {
+enum class EpubLoadResult : uint8_t {
   Success,
   InvalidFormat,
   OutOfMemory,
@@ -32,6 +29,14 @@ EpubLoadResult loadEpub(StringView filePath);
 std::optional<StringView> getTitle();
 std::optional<StringView> getAuthor();
 std::optional<StringView> getLanguage();
+
+std::optional<uint16_t> getSpineEntryCount();
+std::optional<uint16_t> getSpineZipFileIndex(uint16_t spineIndex);
+std::optional<uint16_t> getTocForSpineEntry(uint16_t spineIndex); 
+std::optional<uint16_t> getTocEntryCount();
+std::optional<StringView> getTocLabel(uint16_t tocIndex);
+std::optional<zip::ZipFileEntry> getZipFileEntry(uint16_t zipIndex);
+std::optional<std::span<Book::CssFile>> getCssRules();
 
 void unload();
 void deleteCache();
