@@ -28,7 +28,7 @@ int main(/* int argc, char *argv[] */) {
     }
     println("\"", *Book::getTitle(), "\" by \"", *Book::getAuthor(), "\" (", *Book::getLanguage(), ")");
 
-#if false
+// #if false
     for (uint16_t i = 0; i < *Book::getSpineEntryCount(); i++) {
       auto fileEntry = Book::getZipFileEntry(*Book::getSpineZipFileIndex(i));
       auto tocIndexOpt = Book::getTocForSpineEntry(i);
@@ -40,6 +40,7 @@ int main(/* int argc, char *argv[] */) {
       }
     }
 
+#if false
     auto css = Book::getCssRules();
     if (css.has_value()) {
       println("CSS Rules:");
