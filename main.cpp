@@ -1,12 +1,12 @@
 
 #include <cstdio>
 
-#include "log.h"
+#include <Log.hpp>
 
-#include "stringview.h"
-#include "stopwatch.h"
+#include <StringView.hpp>
+#include <Stopwatch.hpp>
 
-#include "EpubLoader.hpp"
+#include <content/epub/EpubLoader.hpp>
 
 int main(/* int argc, char *argv[] */) {
   StringView testFiles[] = {
@@ -17,18 +17,18 @@ int main(/* int argc, char *argv[] */) {
     "ohler.epub"
   };
   for (const auto& file : testFiles) {
-    printf("Loading EPUB file: %.*s\n", (int)file.size(), file.data());
+    PrintF("Loading EPUB file: %.*s\n", (int)file.size(), file.data());
     Stopwatch sw;
     auto result = Book::loadEpub(file);
-    printf("Loading took %ld microseconds\n", sw.elapsedMicroseconds());
+    PrintF("Loading took %ld microseconds\n", sw.elapsedMicroseconds());
 
     if (result != Book::EpubLoadResult::Success) {
-      printf("Failed to load EPUB: %d\n", (int)result);
+      PrintF("Failed to load EPUB: %d\n", (int)result);
       return 1;
     }
     println("\"", *Book::getTitle(), "\" by \"", *Book::getAuthor(), "\" (", *Book::getLanguage(), ")");
 
-// #if false
+#if false
     for (uint16_t i = 0; i < *Book::getSpineEntryCount(); i++) {
       auto fileEntry = Book::getZipFileEntry(*Book::getSpineZipFileIndex(i));
       auto tocIndexOpt = Book::getTocForSpineEntry(i);
@@ -40,7 +40,7 @@ int main(/* int argc, char *argv[] */) {
       }
     }
 
-#if false
+// #if false
     auto css = Book::getCssRules();
     if (css.has_value()) {
       println("CSS Rules:");
@@ -58,7 +58,7 @@ int main(/* int argc, char *argv[] */) {
 #endif
     
     Book::unload();
-    printf("Successfully loaded and unloaded EPUB file: %.*s\n\n", (int)file.size(), file.data());
+    PrintF("Successfully loaded and unloaded EPUB file: %.*s\n\n", (int)file.size(), file.data());
   }
   return 0;
 }
